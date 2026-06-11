@@ -67,10 +67,10 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
       <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-white">
-            Invite Players
+            Undang Pemain
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Share this link with friends to play together
+            Bagikan tautan ini agar teman bisa bermain bersama
           </DialogDescription>
         </DialogHeader>
 
@@ -78,7 +78,7 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
           {isCreating || !roomCode ? (
             <div className="flex items-center justify-center gap-2 py-8">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <span className="text-slate-400">Creating co-op session...</span>
+              <span className="text-slate-400">Membuat sesi ko-op…</span>
             </div>
           ) : (
             <>
@@ -87,7 +87,7 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
                 <div className="text-4xl font-mono font-bold tracking-widest text-white mb-2">
                   {roomCode}
                 </div>
-                <div className="text-sm text-slate-400">Invite Code</div>
+                <div className="text-sm text-slate-400">Kode Undangan</div>
               </div>
 
               {/* Copy Link */}
@@ -103,12 +103,12 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
                   {copied ? (
                     <>
                       <Check className="w-4 h-4 mr-2 text-green-400" />
-                      Copied!
+                      Tersalin!
                     </>
                   ) : (
                     <>
                       <Copy className="w-4 h-4 mr-2" />
-                      Copy Invite Link
+                      Salin Tautan Undangan
                     </>
                   )}
                 </Button>
@@ -119,7 +119,7 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
                 onClick={() => onOpenChange(false)}
                 className="w-full bg-slate-700 hover:bg-slate-600 text-white border border-slate-600"
               >
-                Close
+                Tutup
               </Button>
             </>
           )}

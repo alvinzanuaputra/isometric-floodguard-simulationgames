@@ -8,12 +8,17 @@ import { simulateTick } from '@/lib/simulation';
 import {
   Budget,
   BuildingType,
+  FloodRegion,
   GameState,
   SavedCityMeta,
   Tool,
   TOOL_INFO,
   ZoneType,
 } from '@/types/game';
+import { createRegionGameState } from '@/lib/mapLoader';
+import { forceWeatherEvent } from '@/lib/floodSimulation';
+import { normalizeBudget, normalizeServiceCoverage } from '@/lib/stateNormalize';
+import { GameStatus, WeatherEvent } from '@/types/game';
 import {
   bulldozeTile,
   createInitialGameState,
@@ -37,12 +42,16 @@ import {
   SpritePack,
 } from '@/lib/renderConfig';
 
-const STORAGE_KEY = 'isocity-game-state';
-const SAVED_CITY_STORAGE_KEY = 'isocity-saved-city'; // For restoring after viewing shared city
-const SAVED_CITIES_INDEX_KEY = 'isocity-saved-cities-index'; // Index of all saved cities
-const SAVED_CITY_PREFIX = 'isocity-city-'; // Prefix for individual saved city states
-const SPRITE_PACK_STORAGE_KEY = 'isocity-sprite-pack';
-const DAY_NIGHT_MODE_STORAGE_KEY = 'isocity-day-night-mode';
+import {
+  FLOODGUARD_GAME_STATE_KEY as STORAGE_KEY,
+  FLOODGUARD_SAVED_MAP_KEY as SAVED_CITY_STORAGE_KEY,
+  FLOODGUARD_SAVED_MAPS_INDEX_KEY as SAVED_CITIES_INDEX_KEY,
+  FLOODGUARD_MAP_PREFIX as SAVED_CITY_PREFIX,
+  FLOODGUARD_SPRITE_PACK_KEY as SPRITE_PACK_STORAGE_KEY,
+  FLOODGUARD_DAY_NIGHT_MODE_KEY as DAY_NIGHT_MODE_STORAGE_KEY,
+  FLOODGUARD_SPRITE_TEST_KEY,
+  FLOODGUARD_TEMP_PREFIX,
+} from '@/lib/storageKeys';
 
 export type DayNightMode = 'auto' | 'day' | 'night';
 
@@ -103,6 +112,10 @@ type GameContextValue = {
   loadSavedCity: (cityId: string) => boolean;
   deleteSavedCity: (cityId: string) => void;
   renameSavedCity: (cityId: string, newName: string) => void;
+  /** Dev — paksa event cuaca (FloodGuard). */
+  devForceWeather: (event: import('@/types/game').WeatherEvent) => void;
+  /** Dev — paksa menang/kalah (FloodGuard). */
+  devForceGameStatus: (status: import('@/types/game').GameStatus) => void;
 };
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -161,6 +174,11 @@ const toolBuildingMap: Partial<Record<Tool, BuildingType>> = {
   park_gate: 'park_gate',
   mountain_lodge: 'mountain_lodge',
   mountain_trailhead: 'mountain_trailhead',
+  flood_pump: 'flood_pump',
+  levee: 'levee',
+  retention_pond: 'retention_pond',
+  drain_channel: 'drain_channel',
+  evacuation_post: 'evacuation_post',
 };
 
 const toolZoneMap: Partial<Record<Tool, ZoneType>> = {
@@ -329,13 +347,13 @@ function tryFreeLocalStorageSpace(): void {
     localStorage.removeItem(SAVED_CITY_STORAGE_KEY);
     
     // Clear sprite test data if any
-    localStorage.removeItem('isocity_sprite_test');
+    localStorage.removeItem(FLOODGUARD_SPRITE_TEST_KEY);
     
     // Clear any other temporary keys
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith('isocity_temp_')) {
+      if (key && key.startsWith(FLOODGUARD_TEMP_PREFIX)) {
         keysToRemove.push(key);
       }
     }
@@ -645,9 +663,21 @@ function deleteCityState(cityId: string): void {
   }
 }
 
-export function GameProvider({ children, startFresh = false }: { children: React.ReactNode; startFresh?: boolean }) {
+export function GameProvider({
+  children,
+  startFresh = false,
+  initialState,
+  selectedRegion,
+}: {
+  children: React.ReactNode;
+  startFresh?: boolean;
+  /** State awal siap pakai (dev hook / hasil load async di page) — mengabaikan localStorage. */
+  initialState?: GameState;
+  /** Wilayah Surabaya — dimuat async via createRegionGameState sebelum game tampil. */
+  selectedRegion?: FloodRegion;
+}) {
   // Start with a default state, we'll load from localStorage after mount (unless startFresh is true)
-  const [state, setState] = useState<GameState>(() => createInitialGameState(DEFAULT_GRID_SIZE, 'IsoCity'));
+  const [state, setState] = useState<GameState>(() => createInitialGameState(DEFAULT_GRID_SIZE, 'Surabaya'));
   
   const [hasExistingGame, setHasExistingGame] = useState(false);
   const [isStateReady, setIsStateReady] = useState(false);
@@ -671,38 +701,65 @@ export function GameProvider({ children, startFresh = false }: { children: React
   
   // Load game state and sprite pack from localStorage on mount (client-side only)
   useEffect(() => {
-    // Load sprite pack preference
+    let cancelled = false;
+
     const savedPackId = loadSpritePackId();
     const pack = getSpritePack(savedPackId);
     setCurrentSpritePack(pack);
     setActiveSpritePack(pack);
-    
-    // Load day/night mode preference
+
     const savedDayNightMode = loadDayNightMode();
     setDayNightModeState(savedDayNightMode);
-    
-    // Load saved cities index
+
     const cities = loadSavedCitiesIndex();
     setSavedCities(cities);
-    
-    // Load game state (unless startFresh is true - used for co-op to start with a new city)
+
+    const applyLoadedState = (loaded: GameState, hasExisting: boolean) => {
+      if (cancelled) return;
+      skipNextSaveRef.current = true;
+      setState(loaded);
+      setHasExistingGame(hasExisting);
+      hasLoadedRef.current = true;
+      setIsStateReady(true);
+    };
+
+    setIsStateReady(false);
+
+    if (initialState) {
+      applyLoadedState(initialState, false);
+      return () => { cancelled = true; };
+    }
+
+    if (selectedRegion) {
+      createRegionGameState(selectedRegion)
+        .then((loaded) => applyLoadedState(loaded, false))
+        .catch((err) => {
+          console.error('Gagal memuat peta wilayah:', err);
+          if (!cancelled) {
+            hasLoadedRef.current = true;
+            setIsStateReady(true);
+          }
+        });
+      return () => { cancelled = true; };
+    }
+
     if (!startFresh) {
       const saved = loadGameState();
       if (saved) {
-        skipNextSaveRef.current = true; // Set skip flag BEFORE updating state
-        setState(saved);
-        setHasExistingGame(true);
+        applyLoadedState(saved, true);
       } else {
         setHasExistingGame(false);
+        hasLoadedRef.current = true;
+        setIsStateReady(true);
       }
     } else {
       setHasExistingGame(false);
+      hasLoadedRef.current = true;
+      setIsStateReady(true);
     }
-    // Mark as loaded immediately - the skipNextSaveRef will handle skipping the first save
-    hasLoadedRef.current = true;
-    // Mark state as ready - consumers should wait for this before using state
-    setIsStateReady(true);
-  }, [startFresh]);
+
+    return () => { cancelled = true; };
+  }, [startFresh, initialState, selectedRegion]);
   
   // Track the state that needs to be saved
   const lastSaveTimeRef = useRef<number>(0);
@@ -1127,7 +1184,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
 
   const newGame = useCallback((name?: string, size?: number) => {
     clearGameState(); // Clear saved state when starting fresh
-    const fresh = createInitialGameState(size ?? DEFAULT_GRID_SIZE, name || 'IsoCity');
+    const fresh = createInitialGameState(size ?? DEFAULT_GRID_SIZE, name || 'Surabaya');
     // Increment gameVersion from current state to ensure vehicles/entities are cleared
     setState((prev) => ({
       ...fresh,
@@ -1198,10 +1255,22 @@ export function GameProvider({ children, startFresh = false }: { children: React
               if (parsed.grid[y][x]?.building && parsed.grid[y][x].building.abandoned === undefined) {
                 parsed.grid[y][x].building.abandoned = false;
               }
+              const tile = parsed.grid[y][x];
+              if (tile) {
+                if (tile.elevation === undefined) tile.elevation = -1;
+                if (tile.waterLevel === undefined) tile.waterLevel = 0;
+                if (tile.flowDirection === undefined) tile.flowDirection = 0;
+                if (tile.playable === undefined) tile.playable = true;
+              }
             }
           }
         }
-        // Increment gameVersion to clear vehicles/entities when loading a new state
+        if (parsed.services) {
+          parsed.services = normalizeServiceCoverage(parsed.services);
+        }
+        if (parsed.budget) {
+          parsed.budget = normalizeBudget(parsed.budget);
+        }
         setState((prev) => ({
           ...(parsed as GameState),
           gameVersion: (prev.gameVersion ?? 0) + 1,
@@ -1298,12 +1367,12 @@ export function GameProvider({ children, startFresh = false }: { children: React
         gridSize: newSize,
         // Expand all service grids
         services: {
-          power: expandBoolGrid(prev.services.power),
-          water: expandBoolGrid(prev.services.water),
-          fire: expandServiceGrid(prev.services.fire),
-          police: expandServiceGrid(prev.services.police),
-          health: expandServiceGrid(prev.services.health),
-          education: expandServiceGrid(prev.services.education),
+          pumpCoverage: expandBoolGrid(prev.services.pumpCoverage),
+          drainCoverage: expandBoolGrid(prev.services.drainCoverage),
+          rescue: expandServiceGrid(prev.services.rescue),
+          evacuation: expandServiceGrid(prev.services.evacuation),
+          medical: expandServiceGrid(prev.services.medical),
+          preparedness: expandServiceGrid(prev.services.preparedness),
         },
         // Update bounds
         bounds: {
@@ -1397,21 +1466,19 @@ export function GameProvider({ children, startFresh = false }: { children: React
         gridSize: newSize,
         // Shrink all service grids
         services: {
-          power: shrinkBoolGrid(prev.services.power),
-          water: shrinkBoolGrid(prev.services.water),
-          fire: shrinkServiceGrid(prev.services.fire),
-          police: shrinkServiceGrid(prev.services.police),
-          health: shrinkServiceGrid(prev.services.health),
-          education: shrinkServiceGrid(prev.services.education),
+          pumpCoverage: shrinkBoolGrid(prev.services.pumpCoverage),
+          drainCoverage: shrinkBoolGrid(prev.services.drainCoverage),
+          rescue: shrinkServiceGrid(prev.services.rescue),
+          evacuation: shrinkServiceGrid(prev.services.evacuation),
+          medical: shrinkServiceGrid(prev.services.medical),
+          preparedness: shrinkServiceGrid(prev.services.preparedness),
         },
-        // Update bounds
         bounds: {
           minX: 0,
           minY: 0,
           maxX: newSize - 1,
           maxY: newSize - 1,
         },
-        // Increment game version to reset vehicles/entities
         gameVersion: (prev.gameVersion ?? 0) + 1,
       };
     });
@@ -1489,6 +1556,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
       month: state.month,
       gridSize: state.gridSize,
       savedAt: Date.now(),
+      ...(state.selectedRegion ? { selectedRegion: state.selectedRegion } : {}),
     };
     
     // Save the city state
@@ -1628,6 +1696,21 @@ export function GameProvider({ children, startFresh = false }: { children: React
     }
   }, [state.id]);
 
+  const devForceWeather = useCallback((event: WeatherEvent) => {
+    setState((prev) => ({
+      ...prev,
+      weatherState: forceWeatherEvent(event, prev.selectedRegion),
+    }));
+  }, []);
+
+  const devForceGameStatus = useCallback((status: GameStatus) => {
+    setState((prev) => ({
+      ...prev,
+      gameStatus: status,
+      speed: status === 'playing' ? prev.speed : 0,
+    }));
+  }, []);
+
   const value: GameContextValue = {
     state,
     latestStateRef,
@@ -1675,6 +1758,8 @@ export function GameProvider({ children, startFresh = false }: { children: React
     loadSavedCity,
     deleteSavedCity,
     renameSavedCity,
+    devForceWeather,
+    devForceGameStatus,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

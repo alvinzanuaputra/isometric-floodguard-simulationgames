@@ -389,6 +389,67 @@ export function SubwayStationIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function FloodPumpIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M12 3v4M9 7h6" />
+      <rect {...baseStroke} x="7" y="9" width="10" height="8" rx="1" />
+      <path {...baseStroke} d="M12 17v4M9 21h6" />
+      <path {...baseStroke} d="M10 12h4M12 10v4" />
+    </svg>
+  );
+}
+
+export function LeveeIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M4 18h16" />
+      <path {...baseStroke} d="M6 18V10l6-4 6 4v8" />
+      <path {...baseStroke} d="M9 12h6M9 15h6" />
+    </svg>
+  );
+}
+
+export function RetentionPondIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <ellipse {...baseStroke} cx="12" cy="14" rx="8" ry="4" />
+      <path {...baseStroke} d="M12 6s4 3 4 6a4 4 0 0 1-8 0c0-3 4-6 4-6z" />
+    </svg>
+  );
+}
+
+export function DrainChannelIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M4 12h16" />
+      <path {...baseStroke} d="M8 9l2 3-2 3M16 9l-2 3 2 3" />
+      <path {...baseStroke} d="M4 8h16M4 16h16" strokeDasharray="3 2" />
+    </svg>
+  );
+}
+
+export function EvacuationPostIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M4 20h16" />
+      <path {...baseStroke} d="M6 20V10l6-5 6 5v10" />
+      <circle {...baseStroke} cx="12" cy="13" r="2" />
+      <path {...baseStroke} d="M10 17h4" />
+    </svg>
+  );
+}
+
+export function ParkLargeIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M8 14c0-3 2-5 4-8 2 3 4 5 4 8" />
+      <path {...baseStroke} d="M14 12c0-2 1.5-3.5 3-6 1.5 2.5 3 4 3 6" />
+      <path {...baseStroke} d="M6 20h12" />
+    </svg>
+  );
+}
+
 function ZoneIcon({ color, size = 18, className }: IconProps & { color: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
@@ -425,5 +486,11 @@ export const ToolIcons: Partial<Record<Tool, React.FC<IconProps>>> = {
   airport: PlaneIcon,
   city_hall: CityHallIcon,
   amusement_park: AmusementParkIcon,
+  flood_pump: FloodPumpIcon,
+  levee: LeveeIcon,
+  retention_pond: RetentionPondIcon,
+  drain_channel: DrainChannelIcon,
+  evacuation_post: EvacuationPostIcon,
+  park_large: ParkLargeIcon,
 };
 

@@ -4,6 +4,8 @@
  */
 
 import { Tile } from '@/types/game';
+import { RENDER_THRESHOLD } from '@/lib/floodSimulation';
+import { elevationToTier } from '@/lib/mapLoader';
 import { OverlayMode } from './types';
 
 // ============================================================================
@@ -12,10 +14,10 @@ import { OverlayMode } from './types';
 
 /** Service coverage data for a tile */
 export type ServiceCoverage = {
-  fire: number;
-  police: number;
-  health: number;
-  education: number;
+  rescue: number;
+  evacuation: number;
+  medical: number;
+  preparedness: number;
 };
 
 /** Configuration for an overlay mode */
@@ -37,8 +39,8 @@ export type OverlayConfig = {
 /** Configuration for each overlay mode */
 export const OVERLAY_CONFIG: Record<OverlayMode, OverlayConfig> = {
   none: {
-    label: 'None',
-    title: 'No Overlay',
+    label: 'Tanpa',
+    title: 'Tanpa Overlay',
     activeColor: '',
     hoverColor: '',
   },
@@ -55,26 +57,26 @@ export const OVERLAY_CONFIG: Record<OverlayMode, OverlayConfig> = {
     hoverColor: 'hover:bg-blue-600',
   },
   fire: {
-    label: 'Fire',
-    title: 'Fire Coverage',
+    label: 'Pemadam',
+    title: 'Cakupan Pemadam Kebakaran',
     activeColor: 'bg-red-500',
     hoverColor: 'hover:bg-red-600',
   },
   police: {
-    label: 'Police',
-    title: 'Police Coverage',
+    label: 'Polisi',
+    title: 'Cakupan Polisi',
     activeColor: 'bg-blue-600',
     hoverColor: 'hover:bg-blue-700',
   },
   health: {
-    label: 'Health',
-    title: 'Health Coverage',
+    label: 'Kesehatan',
+    title: 'Cakupan Kesehatan',
     activeColor: 'bg-green-500',
     hoverColor: 'hover:bg-green-600',
   },
   education: {
-    label: 'Education',
-    title: 'Education Coverage',
+    label: 'Pendidikan',
+    title: 'Cakupan Pendidikan',
     activeColor: 'bg-purple-500',
     hoverColor: 'hover:bg-purple-600',
   },
@@ -84,7 +86,47 @@ export const OVERLAY_CONFIG: Record<OverlayMode, OverlayConfig> = {
     activeColor: 'bg-yellow-500',
     hoverColor: 'hover:bg-yellow-600',
   },
+  terrain_elevation: {
+    label: 'Elevasi',
+    title: 'Kontur Elevasi (meter)',
+    activeColor: 'bg-teal-600',
+    hoverColor: 'hover:bg-teal-700',
+  },
+  flood_risk: {
+    label: 'Risiko Banjir',
+    title: 'Peta Risiko Banjir (elevasi rendah = merah)',
+    activeColor: 'bg-red-600',
+    hoverColor: 'hover:bg-red-700',
+  },
+  flood_level: {
+    label: 'Genangan',
+    title: 'Tingkat Genangan Air (runtime, meter)',
+    activeColor: 'bg-blue-600',
+    hoverColor: 'hover:bg-blue-700',
+  },
 };
+
+/** Mode overlay yang ditampilkan di UI FloodGuard (sembunyikan power/water/subway — §6.4). */
+export const FLOODGUARD_OVERLAY_TOGGLE_MODES: OverlayMode[] = [
+  'none',
+  'terrain_elevation',
+  'flood_risk',
+  'flood_level',
+  'fire',
+  'police',
+  'health',
+  'education',
+];
+
+/** Overlay terrain menutupi seluruh grid, bukan hanya bangunan. */
+export function isFullGridOverlayMode(mode: OverlayMode): boolean {
+  return (
+    mode === 'terrain_elevation' ||
+    mode === 'flood_risk' ||
+    mode === 'flood_level' ||
+    mode === 'subway'
+  );
+}
 
 /** Map of building tools to their corresponding overlay mode */
 export const TOOL_TO_OVERLAY_MAP: Record<string, OverlayMode> = {
@@ -126,6 +168,74 @@ const UNCOVERED_WARNING = 'rgba(239, 68, 68, 0.45)'; // Red tint
 /** No overlay needed (transparent) */
 const NO_OVERLAY = 'rgba(0, 0, 0, 0)';
 
+/** Warna netral untuk tile tanpa data elevasi (padding / peta IsoCity lama). */
+const NON_PLAYABLE_OVERLAY = 'rgba(55, 60, 70, 0.55)';
+
+/** Gradasi elevasi 0–50 m: biru rendah → hijau → coklat tinggi. */
+function elevationToOverlayRgba(elevation: number, alpha = 0.65): string {
+  const t = Math.max(0, Math.min(1, elevation / 50));
+  let r: number;
+  let g: number;
+  let b: number;
+  if (t < 0.5) {
+    const u = t * 2;
+    r = Math.round(25 + u * 55);
+    g = Math.round(70 + u * 130);
+    b = Math.round(190 - u * 110);
+  } else {
+    const u = (t - 0.5) * 2;
+    r = Math.round(80 + u * 110);
+    g = Math.round(200 - u * 130);
+    b = Math.round(70 - u * 50);
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Gradasi biru dari waterLevel runtime (meter). */
+function floodLevelToOverlayRgba(tile: Tile): string {
+  const w = tile.waterLevel;
+  if (w <= RENDER_THRESHOLD) return NO_OVERLAY;
+  const t = Math.min(1, w / 0.5);
+  const alpha = 0.25 + t * 0.6;
+  const b = Math.round(180 + t * 55);
+  return `rgba(29, 78, ${b}, ${alpha})`;
+}
+
+/** Heatmap risiko banjir statis dari tier/elevasi (bukan waterLevel — Fase 3). */
+function floodRiskToOverlayRgba(tile: Tile): string {
+  if (tile.building.type === 'water') {
+    return 'rgba(220, 38, 38, 0.82)';
+  }
+  const tier = elevationToTier(tile.elevation);
+  if (tier <= 1) return 'rgba(239, 68, 68, 0.72)';
+  if (tier === 2) return 'rgba(251, 146, 60, 0.58)';
+  if (tier === 3) return 'rgba(250, 204, 21, 0.38)';
+  return 'rgba(34, 197, 94, 0.22)';
+}
+
+/**
+ * Warna pixel minimap untuk peta dengan data elevasi (FloodGuard).
+ * Air = biru, rendah = merah/oranye, tinggi = hijau/coklat, padding = gelap.
+ */
+export function getMinimapTerrainColor(tile: Tile): string {
+  if (tile.playable === false || (tile.elevation ?? -1) < 0) {
+    return '#1e293b';
+  }
+  if (tile.building.type === 'water') {
+    return '#0ea5e9';
+  }
+  if (tile.building.type === 'road' || tile.building.type === 'bridge') {
+    return '#64748b';
+  }
+  const elev = tile.elevation;
+  if (elev < 3) return '#dc2626';
+  if (elev < 7) return '#ea580c';
+  if (elev < 12) return '#ca8a04';
+  if (elev < 20) return '#65a30d';
+  if (elev < 30) return '#16a34a';
+  return '#78716c';
+}
+
 /**
  * Calculate the fill style color for an overlay tile.
  * 
@@ -159,30 +269,47 @@ export function getOverlayFillStyle(
       return tile.building.watered ? NO_OVERLAY : UNCOVERED_WARNING;
 
     case 'fire':
-      // Red warning only on buildings outside fire coverage
       if (!needsCoverage) return NO_OVERLAY;
-      return coverage.fire > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
+      return coverage.rescue > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
 
     case 'police':
-      // Red warning only on buildings outside police coverage
       if (!needsCoverage) return NO_OVERLAY;
-      return coverage.police > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
+      return coverage.evacuation > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
 
     case 'health':
-      // Red warning only on buildings outside health coverage
       if (!needsCoverage) return NO_OVERLAY;
-      return coverage.health > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
+      return coverage.medical > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
 
     case 'education':
-      // Red warning only on buildings outside education coverage
       if (!needsCoverage) return NO_OVERLAY;
-      return coverage.education > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
+      return coverage.preparedness > 0 ? NO_OVERLAY : UNCOVERED_WARNING;
 
     case 'subway':
       // Underground view overlay - keep existing behavior
       return tile.hasSubway
         ? 'rgba(245, 158, 11, 0.7)'  // Bright amber for existing subway
         : 'rgba(40, 30, 20, 0.4)';   // Dark brown tint for "underground" view
+
+    case 'terrain_elevation': {
+      if (tile.playable === false || (tile.elevation ?? -1) < 0) {
+        return NON_PLAYABLE_OVERLAY;
+      }
+      return elevationToOverlayRgba(tile.elevation);
+    }
+
+    case 'flood_risk': {
+      if (tile.playable === false || (tile.elevation ?? -1) < 0) {
+        return NON_PLAYABLE_OVERLAY;
+      }
+      return floodRiskToOverlayRgba(tile);
+    }
+
+    case 'flood_level': {
+      if (tile.playable === false || (tile.elevation ?? -1) < 0) {
+        return NON_PLAYABLE_OVERLAY;
+      }
+      return floodLevelToOverlayRgba(tile);
+    }
 
     case 'none':
     default:
@@ -200,7 +327,8 @@ export function getOverlayForTool(tool: string): OverlayMode {
 
 /** List of all overlay modes (for iteration) */
 export const OVERLAY_MODES: OverlayMode[] = [
-  'none', 'power', 'water', 'fire', 'police', 'health', 'education', 'subway'
+  'none', 'power', 'water', 'fire', 'police', 'health', 'education', 'subway',
+  'terrain_elevation', 'flood_risk', 'flood_level',
 ];
 
 // ============================================================================
@@ -217,6 +345,9 @@ export const OVERLAY_TO_BUILDING_TYPES: Record<OverlayMode, string[]> = {
   health: ['hospital'],
   education: ['school', 'university'],
   subway: ['subway_station'],
+  terrain_elevation: [],
+  flood_risk: [],
+  flood_level: [],
 };
 
 /** Overlay circle stroke colors (light/visible colors) */
@@ -229,6 +360,9 @@ export const OVERLAY_CIRCLE_COLORS: Record<OverlayMode, string> = {
   health: 'rgba(134, 239, 172, 0.8)',  // Light green
   education: 'rgba(196, 181, 253, 0.8)', // Light purple
   subway: 'rgba(253, 224, 71, 0.8)',   // Yellow
+  terrain_elevation: 'transparent',
+  flood_risk: 'transparent',
+  flood_level: 'transparent',
 };
 
 /** Building highlight glow colors */
@@ -241,6 +375,9 @@ export const OVERLAY_HIGHLIGHT_COLORS: Record<OverlayMode, string> = {
   health: 'rgba(34, 197, 94, 1)',      // Green
   education: 'rgba(168, 85, 247, 1)',  // Purple
   subway: 'rgba(234, 179, 8, 1)',      // Yellow
+  terrain_elevation: 'transparent',
+  flood_risk: 'transparent',
+  flood_level: 'transparent',
 };
 
 /** Overlay circle fill colors (subtle, for area visibility) */
@@ -253,4 +390,7 @@ export const OVERLAY_CIRCLE_FILL_COLORS: Record<OverlayMode, string> = {
   health: 'rgba(134, 239, 172, 0.12)',
   education: 'rgba(196, 181, 253, 0.12)',
   subway: 'rgba(253, 224, 71, 0.12)',
+  terrain_elevation: 'transparent',
+  flood_risk: 'transparent',
+  flood_level: 'transparent',
 };

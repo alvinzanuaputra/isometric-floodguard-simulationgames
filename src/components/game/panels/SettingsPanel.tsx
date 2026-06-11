@@ -12,66 +12,66 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { SpriteTestPanel } from './SpriteTestPanel';
+import { FloodDevPanel } from './FloodDevPanel';
 import { SavedCityMeta } from '@/types/game';
-import { LocaleSelector } from 'gt-next';
 
 // Translatable UI labels
 const UI_LABELS = {
-  settings: msg('Settings'),
-  gameSettings: msg('Game Settings'),
-  disasters: msg('Disasters'),
-  disastersDesc: msg('Enable random fires and disasters'),
-  spritePack: msg('Sprite Pack'),
-  spritePackDesc: msg('Choose building artwork style'),
-  language: msg('Language'),
-  languageDesc: msg('Choose your preferred language'),
-  cityInformation: msg('City Information'),
-  cityName: msg('City Name'),
-  gridSize: msg('Grid Size'),
-  autoSave: msg('Auto-Save'),
-  enabled: msg('Enabled'),
-  expandCity: msg('Expand City (+30x30)'),
-  expandCityDesc: msg('Add 15 tiles on each side. Land edges extend as land, water edges extend as water.'),
-  shrinkCity: msg('Shrink City (-30x30)'),
-  shrinkCityDesc: msg('Remove 15 tiles from each edge. Buildings on edges will be deleted.'),
-  savedCities: msg('Saved Cities'),
-  savedCitiesDesc: msg('Save multiple cities and switch between them'),
-  citySaved: msg('City Saved!'),
-  save: msg('Save'),
-  newCityName: msg('New city name...'),
-  cancel: msg('Cancel'),
-  deleteThisCity: msg('Delete this city?'),
-  delete: msg('Delete'),
-  current: msg('(current)'),
+  settings: msg('Pengaturan'),
+  gameSettings: msg('Pengaturan Permainan'),
+  disasters: msg('Bencana'),
+  disastersDesc: msg('Aktifkan kebakaran dan bencana acak'),
+  spritePack: msg('Paket Sprite'),
+  spritePackDesc: msg('Pilih gaya gambar bangunan'),
+  language: msg('Bahasa'),
+  languageDesc: msg('Pilih bahasa tampilan'),
+  cityInformation: msg('Informasi Wilayah'),
+  cityName: msg('Nama Wilayah'),
+  gridSize: msg('Ukuran Grid'),
+  autoSave: msg('Simpan Otomatis'),
+  enabled: msg('Aktif'),
+  expandCity: msg('Perluas Kota (+30×30)'),
+  expandCityDesc: msg('Tambah 15 tile di setiap sisi. Tepi darat tetap darat, tepi air tetap air.'),
+  shrinkCity: msg('Perkecil Kota (−30×30)'),
+  shrinkCityDesc: msg('Hapus 15 tile dari setiap tepi. Bangunan di tepi akan dihapus.'),
+  savedCities: msg('Peta Tersimpan'),
+  savedCitiesDesc: msg('Simpan beberapa peta dan beralih di antaranya'),
+  citySaved: msg('Peta Tersimpan!'),
+  save: msg('Simpan'),
+  newCityName: msg('Nama peta baru...'),
+  cancel: msg('Batal'),
+  deleteThisCity: msg('Hapus peta ini?'),
+  delete: msg('Hapus'),
+  current: msg('(aktif)'),
   pop: msg('Pop'),
-  saved: msg('Saved'),
-  load: msg('Load'),
-  rename: msg('Rename'),
-  noSavedCities: msg('No saved cities yet.'),
-  restore: msg('Restore'),
-  citySavedBeforeViewing: msg('Your city was saved before viewing a shared city'),
-  startNewGame: msg('Start New Game'),
-  confirmReset: msg('Are you sure? This will reset all progress.'),
+  saved: msg('Disimpan'),
+  load: msg('Muat'),
+  rename: msg('Ubah Nama'),
+  noSavedCities: msg('Belum ada peta tersimpan.'),
+  restore: msg('Pulihkan'),
+  citySavedBeforeViewing: msg('Peta Anda disimpan sebelum melihat peta bersama'),
+  startNewGame: msg('Permainan Baru'),
+  confirmReset: msg('Yakin? Semua progres akan direset.'),
   reset: msg('Reset'),
-  exportGame: msg('Export Game'),
-  exportGameDesc: msg('Copy your game state to share or backup'),
-  copied: msg('Copied!'),
-  copyGameState: msg('Copy Game State'),
-  importGame: msg('Import Game'),
-  importGameDesc: msg('Paste a game state to load it'),
-  pasteGameState: msg('Paste game state here...'),
-  invalidGameState: msg('Invalid game state. Please check and try again.'),
-  gameLoadedSuccess: msg('Game loaded successfully!'),
-  loadGameState: msg('Load Game State'),
-  developerTools: msg('Developer Tools'),
-  openSpriteTestView: msg('Open Sprite Test View'),
-  loadExampleState: msg('Load Example State'),
-  dayNightMode: msg('Day/Night Mode'),
-  dayNightModeDesc: msg('Override the time-of-day appearance without affecting time progression'),
-  auto: msg('Auto'),
-  day: msg('Day'),
-  night: msg('Night'),
-  cannotShrink: msg('Cannot shrink city further - minimum size reached.'),
+  exportGame: msg('Ekspor Permainan'),
+  exportGameDesc: msg('Salin state permainan untuk berbagi atau cadangan'),
+  copied: msg('Tersalin!'),
+  copyGameState: msg('Salin State Permainan'),
+  importGame: msg('Impor Permainan'),
+  importGameDesc: msg('Tempel state permainan untuk memuatnya'),
+  pasteGameState: msg('Tempel state permainan di sini...'),
+  invalidGameState: msg('State tidak valid. Periksa dan coba lagi.'),
+  gameLoadedSuccess: msg('Permainan berhasil dimuat!'),
+  loadGameState: msg('Muat State Permainan'),
+  developerTools: msg('Alat Pengembang'),
+  openSpriteTestView: msg('Buka Tampilan Uji Sprite'),
+  loadExampleState: msg('Muat Contoh'),
+  dayNightMode: msg('Mode Siang/Malam'),
+  dayNightModeDesc: msg('Atur tampilan siang/malam tanpa mengubah progresi waktu'),
+  auto: msg('Otomatis'),
+  day: msg('Siang'),
+  night: msg('Malam'),
+  cannotShrink: msg('Tidak bisa memperkecil lagi — ukuran minimum tercapai.'),
 };
 
 // Format a date for display
@@ -103,7 +103,7 @@ async function loadExampleState(
     const response = await fetch(`/example-states/${filename}`);
     if (!response.ok) {
       console.error(`Failed to fetch ${filename}:`, response.status);
-      alert(`Failed to load example state: ${response.status}`);
+      alert(`Gagal memuat contoh: ${response.status}`);
       return;
     }
     const exampleState = await response.json();
@@ -112,11 +112,11 @@ async function loadExampleState(
       setActivePanel('none');
     } else {
       console.error('loadState returned false - invalid state format for', filename);
-      alert('Failed to load example state: invalid format');
+      alert('Gagal memuat contoh: format tidak valid');
     }
   } catch (e) {
     console.error('Error loading example state:', e);
-    alert(`Error loading example state: ${e}`);
+    alert(`Kesalahan memuat contoh: ${e}`);
   }
 }
 
@@ -269,11 +269,6 @@ export function SettingsPanel() {
               </div>
             </div>
 
-            <div className="py-2">
-              <Label>{m(UI_LABELS.language)}</Label>
-              <p className="text-muted-foreground text-xs mb-2">{m(UI_LABELS.languageDesc)}</p>
-              <LocaleSelector />
-            </div>
           </div>
 
           <div>
@@ -601,39 +596,19 @@ export function SettingsPanel() {
             >
               {m(UI_LABELS.openSpriteTestView)}
             </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state.json', loadState, setActivePanel)}>
-              Load Example State
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('floodguard_barat.json', loadState, setActivePanel)}>
+              Muat Contoh — Surabaya Barat (Pemula)
             </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_2.json', loadState, setActivePanel)}>
-              Load Example State 2
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('floodguard_pusat.json', loadState, setActivePanel)}>
+              Muat Contoh — Surabaya Pusat (Mudah)
             </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_3.json', loadState, setActivePanel)}>
-              Load Example State 3
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('floodguard_timur.json', loadState, setActivePanel)}>
+              Muat Contoh — Surabaya Timur (Sulit)
             </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_4.json', loadState, setActivePanel)}>
-              Load Example State 4
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('isocity_legacy.json', loadState, setActivePanel)}>
+              Muat Contoh — Kota Procedural (Legacy)
             </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_5.json', loadState, setActivePanel)}>
-              Load Example State 5
-            </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_6.json', loadState, setActivePanel)}>
-              Load Example State 6
-            </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_7.json', loadState, setActivePanel)}>
-              Load Example State 7
-            </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_8.json', loadState, setActivePanel)}>
-              Load Example State 8
-            </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_9.json', loadState, setActivePanel)}>
-              Load Example State 9
-            </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_10.json', loadState, setActivePanel)}>
-              Load Example State 10
-            </Button>
-            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_11.json', loadState, setActivePanel)}>
-              Load Example State 11
-            </Button>
+            <FloodDevPanel />
             <div className="mt-4 pt-4 border-t border-border">
               <Label>{m(UI_LABELS.dayNightMode)}</Label>
               <p className="text-muted-foreground text-xs mb-2">{m(UI_LABELS.dayNightModeDesc)}</p>

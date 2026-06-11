@@ -27,14 +27,14 @@ export interface BudgetCategory {
 }
 
 export interface Budget {
-  police: BudgetCategory;
-  fire: BudgetCategory;
-  health: BudgetCategory;
-  education: BudgetCategory;
-  transportation: BudgetCategory;
-  parks: BudgetCategory;
-  power: BudgetCategory;
-  water: BudgetCategory;
+  emergency_response: BudgetCategory;
+  flood_rescue: BudgetCategory;
+  medical_response: BudgetCategory;
+  preparedness_training: BudgetCategory;
+  evacuation_transport: BudgetCategory;
+  green_spaces: BudgetCategory;
+  pump_stations: BudgetCategory;
+  drain_network: BudgetCategory;
 }
 
 export interface CityEconomy {

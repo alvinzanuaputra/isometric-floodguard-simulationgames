@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { msg, useMessages } from 'gt-next';
 import { useGame } from '@/context/GameContext';
-import { Tile } from '@/types/game';
+import { Tile, TOOL_INFO, Tool } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,8 @@ import {
   EnvironmentIcon,
   CloseIcon,
 } from '@/components/ui/Icons';
-import { Users } from 'lucide-react';
+import { CloudRain, Users } from 'lucide-react';
+import { WEATHER_EVENT_LABELS } from '@/lib/floodSimulation';
 import {
   Dialog,
   DialogContent,
@@ -30,36 +31,42 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 // Translatable UI labels
 const UI_LABELS = {
   pop: msg('Pop'),
-  funds: msg('Funds'),
-  tax: msg('Tax'),
-  taxRate: msg('Tax Rate'),
-  emptyLot: msg('Empty Lot'),
-  jobsLower: msg('jobs'),
-  jobs: msg('Jobs'),
-  hasPower: msg('Has power'),
-  noPower: msg('No power'),
-  hasWater: msg('Has water'),
-  noWater: msg('No water'),
-  happiness: msg('Happiness'),
-  health: msg('Health'),
-  education: msg('Education'),
-  safety: msg('Safety'),
-  environment: msg('Environ'),
-  population: msg('Population'),
-  monthlyIncome: msg('Monthly Income'),
-  monthlyExpenses: msg('Monthly Expenses'),
-  weeklyNet: msg('Weekly Net'),
-  exitToMainMenu: msg('Exit to Main Menu'),
-  exitDialogTitle: msg('Exit to Main Menu'),
-  exitDialogDescription: msg('Would you like to save your city before exiting?'),
-  exitWithoutSaving: msg('Exit Without Saving'),
-  saveAndExit: msg('Save & Exit'),
-  zone: msg('Zone'),
+  funds: msg('Dana'),
+  tax: msg('Pajak'),
+  taxRate: msg('Tarif Pajak'),
+  emptyLot: msg('Lahan Kosong'),
+  jobsLower: msg('pekerjaan'),
+  jobs: msg('Pekerjaan'),
+  hasPower: msg('Ada listrik'),
+  noPower: msg('Tanpa listrik'),
+  hasWater: msg('Ada air'),
+  noWater: msg('Tanpa air'),
+  happiness: msg('Kebahagiaan'),
+  health: msg('Kesehatan'),
+  education: msg('Pendidikan'),
+  safety: msg('Keamanan'),
+  environment: msg('Lingkungan'),
+  population: msg('Populasi'),
+  monthlyIncome: msg('Pemasukan Bulanan'),
+  monthlyExpenses: msg('Pengeluaran Bulanan'),
+  weeklyNet: msg('Bersih Mingguan'),
+  exitToMainMenu: msg('Keluar ke Menu Utama'),
+  exitDialogTitle: msg('Keluar ke Menu Utama'),
+  exitDialogDescription: msg('Simpan peta sebelum keluar?'),
+  exitWithoutSaving: msg('Keluar Tanpa Menyimpan'),
+  saveAndExit: msg('Simpan & Keluar'),
+  zone: msg('Zona'),
+};
+
+const ZONE_LABELS: Record<string, string> = {
+  none: 'Tanpa Zona',
+  residential: 'Permukiman',
+  commercial: 'Komersial',
+  industrial: 'Industri',
 };
 
 // Sun/Moon icon for time of day
@@ -114,13 +121,13 @@ export function MobileTopBar({
   onExit,
 }: { 
   selectedTile: Tile | null;
-  services: { police: number[][]; fire: number[][]; health: number[][]; education: number[][]; power: boolean[][]; water: boolean[][] };
+  services: import('@/types/game').ServiceCoverage;
   onCloseTile: () => void;
   onShare?: () => void;
   onExit?: () => void;
 }) {
   const { state, setSpeed, setTaxRate, visualHour, saveCity } = useGame();
-  const { stats, year, month, speed, taxRate, cityName } = state;
+  const { stats, year, month, speed, taxRate, cityName, weatherState } = state;
   const [showDetails, setShowDetails] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showTaxSlider, setShowTaxSlider] = useState(false);
@@ -158,6 +165,14 @@ export function MobileTopBar({
               <span className="text-muted-foreground text-[10px] font-mono">
                 {monthNames[month - 1]} {year}
               </span>
+              {weatherState && (
+                <span className="flex items-center gap-0.5 text-[9px] text-sky-400">
+                  <CloudRain size={10} />
+                  {WEATHER_EVENT_LABELS[weatherState.currentEvent]}
+                  {' '}
+                  {Math.round(weatherState.rainfallRate)}%
+                </span>
+              )}
             </div>
             <div className="flex flex-col items-start">
               <span className="text-xs font-mono font-semibold text-foreground">
@@ -181,7 +196,7 @@ export function MobileTopBar({
                 className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
                   speed === 0 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
                 }`}
-                title="Pause"
+                title="Jeda"
               >
                 <PauseIcon size={12} />
               </button>
@@ -190,7 +205,7 @@ export function MobileTopBar({
                 className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
                   speed === 1 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
                 }`}
-                title="Normal speed"
+                title="Kecepatan normal"
               >
                 <PlayIcon size={12} />
               </button>
@@ -199,7 +214,7 @@ export function MobileTopBar({
                 className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
                   speed === 2 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
                 }`}
-                title="2x speed"
+                title="Kecepatan 2×"
               >
                 <div className="flex items-center -space-x-[5px]">
                   <PlayIcon size={12} />
@@ -211,7 +226,7 @@ export function MobileTopBar({
                 className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
                   speed === 3 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
                 }`}
-                title="3x speed"
+                title="Kecepatan 3×"
               >
                 <div className="flex items-center -space-x-[7px]">
                   <PlayIcon size={12} />
@@ -223,13 +238,11 @@ export function MobileTopBar({
 
             {/* Language selector, Share, and Exit button group */}
             <div className="flex items-center -space-x-0.5">
-              <LanguageSelector useDrawer iconSize={12} />
-
               {onShare && (
                 <button
                   onClick={onShare}
                   className="h-6 w-4 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                  title="Invite Players"
+                  title="Undang Pemain"
                 >
                   <Users className="w-3 h-3" />
                 </button>
@@ -239,7 +252,7 @@ export function MobileTopBar({
                 <button
                   onClick={() => setShowExitDialog(true)}
                   className="h-6 w-4 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                  title="Exit to Main Menu"
+                  title="Keluar ke Menu Utama"
                 >
                   <svg 
                     className="w-3 h-3 -scale-x-100" 
@@ -317,10 +330,13 @@ export function MobileTopBar({
                 selectedTile.zone === 'commercial' ? 'bg-blue-500' :
                 selectedTile.zone === 'industrial' ? 'bg-amber-500' : 'bg-muted-foreground/40'
               }`} />
-              <span className="text-xs font-medium text-foreground capitalize">
+              <span className="text-xs font-medium text-foreground">
                 {selectedTile.building.type === 'empty' 
-                  ? (selectedTile.zone === 'none' ? m(UI_LABELS.emptyLot) : `${selectedTile.zone} ${m(UI_LABELS.zone)}`)
-                  : selectedTile.building.type.replace(/_/g, ' ')}
+                  ? (selectedTile.zone === 'none' ? m(UI_LABELS.emptyLot) : `${ZONE_LABELS[selectedTile.zone] ?? selectedTile.zone} ${m(UI_LABELS.zone)}`)
+                  : (() => {
+                      const toolEntry = TOOL_INFO[selectedTile.building.type as Tool];
+                      return toolEntry ? String(m(toolEntry.name)) : selectedTile.building.type.replace(/_/g, ' ');
+                    })()}
               </span>
             </div>
             

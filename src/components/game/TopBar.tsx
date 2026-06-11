@@ -19,20 +19,21 @@ import {
   CheckIcon,
 } from '@/components/ui/Icons';
 import { copyShareUrl } from '@/lib/shareState';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
+import { WEATHER_EVENT_LABELS } from '@/lib/floodSimulation';
+import { CloudRain } from 'lucide-react';
 
 // Translatable UI labels
 const UI_LABELS = {
-  population: msg('Population'),
-  jobs: msg('Jobs'),
-  funds: msg('Funds'),
-  monthly: msg('Monthly'),
-  tax: msg('Tax'),
-  happiness: msg('Happiness'),
-  health: msg('Health'),
-  education: msg('Education'),
-  safety: msg('Safety'),
-  environment: msg('Environment'),
+  population: msg('Populasi'),
+  jobs: msg('Pekerjaan'),
+  funds: msg('Dana'),
+  monthly: msg('Bulanan'),
+  tax: msg('Pajak'),
+  happiness: msg('Kebahagiaan'),
+  health: msg('Kesehatan'),
+  education: msg('Pendidikan'),
+  safety: msg('Keamanan'),
+  environment: msg('Lingkungan'),
 };
 
 // ============================================================================
@@ -173,10 +174,10 @@ export const StatsPanel = React.memo(function StatsPanel() {
 
 export const TopBar = React.memo(function TopBar() {
   const { state, setSpeed, setTaxRate, visualHour } = useGame();
-  const { stats, year, month, day, speed, taxRate, cityName } = state;
+  const { stats, year, month, day, speed, taxRate, cityName, weatherState } = state;
   const m = useMessages();
   
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const formattedDate = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${year}`;
   
   return (
@@ -197,6 +198,23 @@ export const TopBar = React.memo(function TopBar() {
             </Tooltip>
             <TimeOfDayIcon hour={visualHour} />
           </div>
+          {weatherState && (
+            <div
+              className="flex items-center gap-1.5 mt-0.5 text-xs"
+              title={`Intensitas hujan: ${Math.round(weatherState.rainfallRate)}`}
+            >
+              <CloudRain
+                size={12}
+                className={weatherState.rainfallRate > 0 ? 'text-sky-400' : 'text-muted-foreground'}
+              />
+              <span className="text-foreground">
+                {WEATHER_EVENT_LABELS[weatherState.currentEvent]}
+              </span>
+              <span className="text-muted-foreground font-mono tabular-nums">
+                {Math.round(weatherState.rainfallRate)}%
+              </span>
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-0 bg-secondary rounded-md p-0">
@@ -207,7 +225,7 @@ export const TopBar = React.memo(function TopBar() {
               variant={speed === s ? 'default' : 'ghost'}
               size="icon-sm"
               className="h-7 w-7 p-0 m-0"
-              title={s === 0 ? 'Pause' : s === 1 ? 'Normal' : s === 2 ? 'Fast' : 'Very Fast'}
+              title={s === 0 ? 'Jeda' : s === 1 ? 'Normal' : s === 2 ? 'Cepat' : 'Sangat Cepat'}
             >
               {s === 0 ? <PauseIcon size={12} /> : 
                s === 1 ? <PlayIcon size={12} /> : 
@@ -267,9 +285,6 @@ export const TopBar = React.memo(function TopBar() {
           <span className="text-foreground text-xs font-mono tabular-nums w-7">{taxRate}%</span>
         </div>
         
-        <Separator orientation="vertical" className="h-8" />
-        
-        <LanguageSelector iconOnly={false} variant="ghost" iconSize={14} />
       </div>
     </div>
   );

@@ -470,6 +470,18 @@ export type Firework = {
   sourceTileY: number;
 };
 
+// Rain particles — screen-space diagonal streaks (Fase 6)
+export type RainParticle = {
+  x: number;
+  y: number;
+  length: number;
+  speed: number;
+  opacity: number;
+  thickness: number;
+  windX: number;
+  windY: number;
+};
+
 // Cloud types for atmospheric effects - distinct meteorological cloud types
 export type CloudType =
   | 'cumulus'       // Fluffy fair-weather clouds
@@ -524,10 +536,25 @@ export type WorldRenderState = {
   zoom: number;
   speed: number;
   canvasSize: { width: number; height: number };
+  /** Wilayah FloodGuard aktif — efek cuaca/evakuasi hanya bila terisi */
+  selectedRegion?: import('@/types/game').FloodRegion;
+  /** Curah hujan saat ini (0–100), dari weatherState simulasi */
+  rainfallRate?: number;
 };
 
 // Overlay modes for visualization
-export type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway';
+export type OverlayMode =
+  | 'none'
+  | 'power'
+  | 'water'
+  | 'fire'
+  | 'police'
+  | 'health'
+  | 'education'
+  | 'subway'
+  | 'terrain_elevation'
+  | 'flood_risk'
+  | 'flood_level';
 
 // ============================================================================
 // Train Types

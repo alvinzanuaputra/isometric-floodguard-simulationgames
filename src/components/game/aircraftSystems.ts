@@ -7,6 +7,7 @@ import {
   CONTRAIL_SPAWN_INTERVAL,
   HELICOPTER_MIN_POPULATION,
   HELICOPTER_COLORS,
+  FLOODGUARD_SAR_HELICOPTER_COLOR,
   ROTOR_WASH_MAX_AGE,
   ROTOR_WASH_SPAWN_INTERVAL,
   PLANE_TYPES,
@@ -392,7 +393,9 @@ export function useAircraftSystems(
           stateProgress: 0,
           rotorWash: [],
           rotorAngle: 0,
-          color: HELICOPTER_COLORS[Math.floor(Math.random() * HELICOPTER_COLORS.length)],
+          color: worldStateRef.current.selectedRegion
+            ? FLOODGUARD_SAR_HELICOPTER_COLOR
+            : HELICOPTER_COLORS[Math.floor(Math.random() * HELICOPTER_COLORS.length)],
           // Searchlight starts pointing forward-down, sweeps side to side
           searchlightAngle: 0,
           searchlightSweepSpeed,

@@ -5,13 +5,11 @@ import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 import { useGame } from '@/context/GameContext';
 import { GameAction, GameActionInput } from '@/lib/multiplayer/types';
 import { Tool, Budget, GameState, SavedCityMeta } from '@/types/game';
+import { FLOODGUARD_SAVED_MAPS_INDEX_KEY as SAVED_CITIES_INDEX_KEY } from '@/lib/storageKeys';
 
 // Batch placement buffer for reducing message count during drags
 const BATCH_FLUSH_INTERVAL = 100; // ms - flush every 100ms during drag
 const BATCH_MAX_SIZE = 100; // Max placements before force flush
-
-// Storage key for saved cities index (matches page.tsx)
-const SAVED_CITIES_INDEX_KEY = 'isocity-saved-cities-index';
 
 // Update the saved cities index with the current multiplayer city state
 function updateSavedCitiesIndex(state: GameState, roomCode: string): void {

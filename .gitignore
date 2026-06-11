@@ -35,3 +35,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Peta mentah Surabaya (~100 MB) — runtime hanya pakai *_processed.json
+/public/map-data/SBY_Barat.json
+/public/map-data/SBY_Pusat.json
+/public/map-data/SBY_Selatan.json
+/public/map-data/SBY_Timur.json
+/public/map-data/SBY_Utara.json

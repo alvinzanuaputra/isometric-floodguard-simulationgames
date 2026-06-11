@@ -24,6 +24,17 @@ export function getDarkness(hour: number): number {
   return 1; // Night
 }
 
+/** Kegelapan tambahan dari curah hujan — faktor di atas siklus siang/malam (Fase 6) */
+export function getRainDarkness(rainfallRate: number): number {
+  if (rainfallRate <= 0) return 0;
+  return Math.min(0.35, (rainfallRate / 100) * 0.35);
+}
+
+/** Ambient kelabu saat langit mendung */
+export function getRainAmbientColor(): { r: number; g: number; b: number } {
+  return { r: 130, g: 138, b: 148 };
+}
+
 /**
  * Get ambient color based on time of day
  * Returns RGB values for the ambient lighting overlay
@@ -342,16 +353,28 @@ export function useLightingSystem(config: LightingSystemConfig): void {
     }
     
     const dpr = window.devicePixelRatio || 1;
-    const darkness = getDarkness(visualHour);
+    const timeDarkness = getDarkness(visualHour);
+    const { selectedRegion, rainfallRate = 0 } = worldStateRef.current;
+    const rainDarkness = selectedRegion && rainfallRate > 0 ? getRainDarkness(rainfallRate) : 0;
+    const darkness = Math.min(1, timeDarkness + rainDarkness);
     
     // Clear canvas first
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // If it's full daylight, just clear and return (early exit)
     if (darkness <= 0.01) return;
     
-    const ambient = getAmbientColor(visualHour);
+    const timeAmbient = getAmbientColor(visualHour);
+    let ambient = timeAmbient;
+    if (rainDarkness > 0 && timeDarkness < 0.5) {
+      const rainAmbient = getRainAmbientColor();
+      const blend = rainDarkness / 0.35;
+      ambient = {
+        r: Math.round(timeAmbient.r * (1 - blend) + rainAmbient.r * blend),
+        g: Math.round(timeAmbient.g * (1 - blend) + rainAmbient.g * blend),
+        b: Math.round(timeAmbient.b * (1 - blend) + rainAmbient.b * blend),
+      };
+    }
     
     // Apply darkness overlay
     const alpha = darkness * 0.6;

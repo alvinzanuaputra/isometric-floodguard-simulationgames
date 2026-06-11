@@ -26,7 +26,9 @@ export type BuildingType =
   | 'mini_golf_course' | 'bleachers_field' | 'go_kart_track' | 'amphitheater'
   | 'greenhouse_garden' | 'animal_pens_farm' | 'cabin_house' | 'campground'
   | 'marina_docks_small' | 'pier_large' | 'roller_coaster_small'
-  | 'community_garden' | 'pond_park' | 'park_gate' | 'mountain_lodge' | 'mountain_trailhead';
+  | 'community_garden' | 'pond_park' | 'park_gate' | 'mountain_lodge' | 'mountain_trailhead'
+  // FloodGuard infrastruktur banjir (Fase 5)
+  | 'flood_pump' | 'levee' | 'retention_pond' | 'drain_channel' | 'evacuation_post';
 
 export type BridgeType = 'small' | 'medium' | 'large' | 'suspension';
 export type BridgeOrientation = 'ns' | 'ew';
@@ -44,6 +46,10 @@ export interface Building {
   age: number;
   constructionProgress: number;
   abandoned: boolean;
+  /** Volume air tersimpan di waduk penampung (meter) — retention_pond. */
+  storedVolume?: number;
+  /** true = bangunan kota default (seeding), bukan penempatan pemain. */
+  isSeeded?: boolean;
   flipped?: boolean;
   cityId?: string;
   bridgeType?: BridgeType;
@@ -126,4 +132,9 @@ export const BUILDING_STATS: Record<BuildingType, { maxPop: number; maxJobs: num
   park_gate: { maxPop: 0, maxJobs: 1, pollution: -2, landValue: 8 },
   mountain_lodge: { maxPop: 0, maxJobs: 15, pollution: -5, landValue: 35 },
   mountain_trailhead: { maxPop: 0, maxJobs: 2, pollution: -10, landValue: 15 },
+  flood_pump: { maxPop: 0, maxJobs: 15, pollution: 0, landValue: 10 },
+  levee: { maxPop: 0, maxJobs: 0, pollution: 0, landValue: 5 },
+  retention_pond: { maxPop: 0, maxJobs: 4, pollution: -5, landValue: 12 },
+  drain_channel: { maxPop: 0, maxJobs: 0, pollution: 0, landValue: 0 },
+  evacuation_post: { maxPop: 0, maxJobs: 12, pollution: 0, landValue: 8 },
 };

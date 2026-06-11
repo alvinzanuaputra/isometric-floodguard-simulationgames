@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Firework, FactorySmog, Cloud, CloudPuff, CloudType, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from './types';
+import { Firework, FactorySmog, Cloud, CloudPuff, CloudType, RainParticle, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from './types';
 import { BuildingType } from '@/types/game';
 import {
   FIREWORK_BUILDINGS,
@@ -56,6 +56,10 @@ import {
   CLOUD_TYPE_WEIGHTS_DEFAULT,
   CLOUD_TYPES_ORDERED,
   CLOUD_TYPE_CONFIG,
+  RAIN_MAX_PARTICLES_DESKTOP,
+  RAIN_MAX_PARTICLES_MOBILE,
+  RAIN_WIND_X,
+  RAIN_WIND_Y,
 } from './constants';
 import { gridToScreen } from './utils';
 import { findFireworkBuildings, findSmogFactories } from './gridFinders';
@@ -72,6 +76,7 @@ export interface EffectsSystemRefs {
   cloudsRef: React.MutableRefObject<Cloud[]>;
   cloudIdRef: React.MutableRefObject<number>;
   cloudSpawnTimerRef: React.MutableRefObject<number>;
+  rainParticlesRef: React.MutableRefObject<RainParticle[]>;
 }
 
 export interface EffectsSystemState {
@@ -96,9 +101,38 @@ export function useEffectsSystems(
     cloudsRef,
     cloudIdRef,
     cloudSpawnTimerRef,
+    rainParticlesRef,
   } = refs;
 
   const { worldStateRef, gridVersionRef, isMobile } = systemState;
+
+  const spawnRainParticle = useCallback((canvasWidth: number, canvasHeight: number, rainfallRate: number): RainParticle => {
+    const intensity = rainfallRate / 100;
+    const isHeavy = rainfallRate >= 60;
+    const isDrizzle = rainfallRate < 25;
+    const length = isDrizzle
+      ? 6 + Math.random() * 6
+      : isHeavy
+        ? 16 + Math.random() * 14
+        : 10 + Math.random() * 10;
+    const speed = (180 + rainfallRate * 4) * (0.85 + Math.random() * 0.3);
+    const thickness = isDrizzle ? 0.6 : isHeavy ? 1.8 : 1.1;
+    const opacity = isDrizzle
+      ? 0.15 + intensity * 0.25
+      : isHeavy
+        ? 0.35 + intensity * 0.35
+        : 0.25 + intensity * 0.3;
+    return {
+      x: Math.random() * canvasWidth,
+      y: -length - Math.random() * canvasHeight * 0.15,
+      length,
+      speed,
+      opacity,
+      thickness,
+      windX: RAIN_WIND_X * (0.9 + Math.random() * 0.2),
+      windY: RAIN_WIND_Y,
+    };
+  }, []);
 
   // Find firework buildings callback
   const findFireworkBuildingsCallback = useCallback((): { x: number; y: number; type: BuildingType }[] => {
@@ -1082,6 +1116,59 @@ export function useEffectsSystems(
     ctx.restore();
   }, [worldStateRef, cloudsRef]);
 
+  const updateRain = useCallback((delta: number) => {
+    const { selectedRegion, rainfallRate = 0, canvasSize } = worldStateRef.current;
+    if (!selectedRegion || rainfallRate <= 0) {
+      rainParticlesRef.current = [];
+      return;
+    }
+
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const canvasWidth = canvasSize.width;
+    const canvasHeight = canvasSize.height;
+    const maxParticles = isMobile ? RAIN_MAX_PARTICLES_MOBILE : RAIN_MAX_PARTICLES_DESKTOP;
+    const targetCount = Math.max(4, Math.floor((rainfallRate / 100) * maxParticles));
+
+    while (rainParticlesRef.current.length < targetCount) {
+      rainParticlesRef.current.push(spawnRainParticle(canvasWidth, canvasHeight, rainfallRate));
+    }
+    if (rainParticlesRef.current.length > targetCount) {
+      rainParticlesRef.current.length = targetCount;
+    }
+
+    const margin = 40 * dpr;
+    rainParticlesRef.current = rainParticlesRef.current.map(p => {
+      const nx = p.x + p.windX * p.speed * delta;
+      const ny = p.y + p.windY * p.speed * delta;
+      if (ny > canvasHeight + margin || nx > canvasWidth + margin || nx < -margin) {
+        return spawnRainParticle(canvasWidth, canvasHeight, rainfallRate);
+      }
+      return { ...p, x: nx, y: ny };
+    });
+  }, [worldStateRef, rainParticlesRef, isMobile, spawnRainParticle]);
+
+  const drawRain = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { selectedRegion, rainfallRate = 0 } = worldStateRef.current;
+    if (!selectedRegion || rainfallRate <= 0 || rainParticlesRef.current.length === 0) {
+      return;
+    }
+
+    const canvas = ctx.canvas;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    for (const p of rainParticlesRef.current) {
+      ctx.strokeStyle = `rgba(180, 200, 230, ${p.opacity})`;
+      ctx.lineWidth = p.thickness;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + p.windX * p.length * 0.35, p.y + p.length);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }, [worldStateRef, rainParticlesRef]);
+
   return {
     updateFireworks,
     drawFireworks,
@@ -1089,6 +1176,8 @@ export function useEffectsSystems(
     drawSmog,
     updateClouds,
     drawClouds,
+    updateRain,
+    drawRain,
     findFireworkBuildingsCallback,
     findSmogFactoriesCallback,
   };

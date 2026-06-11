@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Boat, TourWaypoint, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from './types';
 import {
   BOAT_COLORS,
+  FLOODGUARD_EVACUATION_BOAT_COLORS,
   BOAT_MIN_ZOOM,
   WAKE_MIN_ZOOM_MOBILE,
   BOATS_PER_DOCK,
@@ -133,7 +134,9 @@ export function useBoatSystem(
           destScreenX: firstDestScreenX,
           destScreenY: firstDestScreenY,
           age: 0,
-          color: BOAT_COLORS[Math.floor(Math.random() * BOAT_COLORS.length)],
+          color: worldStateRef.current.selectedRegion
+            ? FLOODGUARD_EVACUATION_BOAT_COLORS[Math.floor(Math.random() * FLOODGUARD_EVACUATION_BOAT_COLORS.length)]
+            : BOAT_COLORS[Math.floor(Math.random() * BOAT_COLORS.length)],
           wake: [],
           wakeSpawnProgress: 0,
           sizeVariant: Math.random() < 0.7 ? 0 : 1, // 70% small boats, 30% medium
@@ -421,8 +424,13 @@ export function useBoatSystem(
         ctx.fill();
       }
       
+      const isEvacuation = !!worldStateRef.current.selectedRegion;
+      const hullColor = isEvacuation
+        ? (boat.color === '#ffffff' ? '#c41e3a' : boat.color)
+        : boat.color;
+
       // Draw boat hull (simple sailboat/motorboat shape)
-      ctx.fillStyle = boat.color;
+      ctx.fillStyle = hullColor;
       ctx.beginPath();
       // Hull - pointed bow, flat stern
       ctx.moveTo(10, 0); // Bow
@@ -433,6 +441,17 @@ export function useBoatSystem(
       ctx.quadraticCurveTo(8, 4, 10, 0); // Back to bow
       ctx.closePath();
       ctx.fill();
+
+      if (isEvacuation) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(6, -3.5);
+        ctx.lineTo(2, -3.5);
+        ctx.lineTo(-2, 3.5);
+        ctx.lineTo(2, 3.5);
+        ctx.closePath();
+        ctx.fill();
+      }
       
       // Hull outline
       ctx.strokeStyle = '#1a1a1a';

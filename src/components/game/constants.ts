@@ -178,6 +178,17 @@ export const WATER_ASSET_PATH = '/assets/water.png';
 
 // Boat system constants
 export const BOAT_COLORS = ['#ffffff', '#1e3a5f', '#8b4513', '#2f4f4f', '#c41e3a', '#1e90ff']; // Various boat hull colors
+
+// FloodGuard evakuasi & kendaraan darurat (Fase 6 — tinting procedural)
+export const FLOODGUARD_EVACUATION_BOAT_COLORS = ['#c41e3a', '#ffffff'];
+export const FLOODGUARD_SAR_HELICOPTER_COLOR = '#f97316';
+export const FLOODGUARD_BPBD_TRUCK_COLORS = ['#FFD700', '#F4C430', '#EAB308'];
+
+// Partikel hujan (Fase 6 §6.6)
+export const RAIN_MAX_PARTICLES_DESKTOP = 500;
+export const RAIN_MAX_PARTICLES_MOBILE = 100;
+export const RAIN_WIND_X = 2.2;
+export const RAIN_WIND_Y = 1;
 export const BOAT_MIN_ZOOM = 0.3; // Minimum zoom level to show boats
 export const WAKE_MIN_ZOOM_MOBILE = 0.45; // Minimum zoom level to show wakes on mobile (matches traffic lights threshold)
 export const BOATS_PER_DOCK = 15; // Number of boats per marina/pier (10x density)

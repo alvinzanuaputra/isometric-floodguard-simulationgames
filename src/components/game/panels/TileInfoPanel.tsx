@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { useMessages } from 'gt-next';
 import { Tile, BuildingType, TOOL_INFO, Tool } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,14 +19,7 @@ import {
 
 interface TileInfoPanelProps {
   tile: Tile;
-  services: {
-    police: number[][];
-    fire: number[][];
-    health: number[][];
-    education: number[][];
-    power: boolean[][];
-    water: boolean[][];
-  };
+  services: import('@/types/game').ServiceCoverage;
   onClose: () => void;
   isMobile?: boolean;
 }
@@ -38,6 +32,19 @@ export function TileInfoPanel({
 }: TileInfoPanelProps) {
   const { x, y } = tile;
   const { state, upgradeServiceBuilding } = useGame();
+  const m = useMessages();
+
+  const ZONE_LABELS: Record<string, string> = {
+    none: 'Tanpa Zona',
+    residential: 'Permukiman',
+    commercial: 'Komersial',
+    industrial: 'Industri',
+  };
+
+  const buildingInfo = TOOL_INFO[tile.building.type as Tool];
+  const buildingLabel = buildingInfo
+    ? String(m(buildingInfo.name))
+    : tile.building.type.replace(/_/g, ' ');
   
   // Check if this is a service building
   const isServiceBuilding = SERVICE_BUILDING_TYPES.has(tile.building.type);
@@ -98,7 +105,7 @@ export function TileInfoPanel({
       onClick={handleCardClick}
     >
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-sans">Tile ({x}, {y})</CardTitle>
+        <CardTitle className="text-sm font-sans">Petak ({x}, {y})</CardTitle>
         <Button variant="ghost" size="icon-sm" onClick={onClose}>
           <CloseIcon size={14} />
         </Button>
@@ -106,11 +113,11 @@ export function TileInfoPanel({
       
       <CardContent className="space-y-3 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Building</span>
-          <span className="capitalize">{tile.building.type.replace(/_/g, ' ')}</span>
+          <span className="text-muted-foreground">Bangunan</span>
+          <span>{buildingLabel}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Zone</span>
+          <span className="text-muted-foreground">Zona</span>
           <Badge variant={
             tile.zone === 'residential' ? 'default' :
             tile.zone === 'commercial' ? 'secondary' :
@@ -120,42 +127,42 @@ export function TileInfoPanel({
             tile.zone === 'commercial' ? 'bg-blue-500/20 text-blue-400' :
             tile.zone === 'industrial' ? 'bg-amber-500/20 text-amber-400' : ''
           }>
-            {tile.zone === 'none' ? 'Unzoned' : tile.zone}
+            {ZONE_LABELS[tile.zone] ?? tile.zone}
           </Badge>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Level</span>
+          <span className="text-muted-foreground">Tingkat</span>
           <span>{tile.building.level}/5</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Population</span>
+          <span className="text-muted-foreground">Populasi</span>
           <span>{tile.building.population}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Jobs</span>
+          <span className="text-muted-foreground">Pekerjaan</span>
           <span>{tile.building.jobs}</span>
         </div>
         
         <Separator />
         
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Power</span>
+          <span className="text-muted-foreground">Listrik</span>
           <Badge variant={tile.building.powered ? 'default' : 'destructive'}>
-            {tile.building.powered ? 'Connected' : 'No Power'}
+            {tile.building.powered ? 'Terhubung' : 'Tanpa Listrik'}
           </Badge>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Water</span>
+          <span className="text-muted-foreground">Air</span>
           <Badge variant={tile.building.watered ? 'default' : 'destructive'} className={tile.building.watered ? 'bg-cyan-500/20 text-cyan-400' : ''}>
-            {tile.building.watered ? 'Connected' : 'No Water'}
+            {tile.building.watered ? 'Terhubung' : 'Tanpa Air'}
           </Badge>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Land Value</span>
+          <span className="text-muted-foreground">Nilai Lahan</span>
           <span>${tile.landValue}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Pollution</span>
+          <span className="text-muted-foreground">Polusi</span>
           <span className={tile.pollution > 50 ? 'text-red-400' : tile.pollution > 25 ? 'text-amber-400' : 'text-green-400'}>
             {Math.round(tile.pollution)}%
           </span>
@@ -165,47 +172,47 @@ export function TileInfoPanel({
           <>
             <Separator />
             <div className="flex justify-between text-red-400">
-              <span>ON FIRE!</span>
-              <span>{Math.round(tile.building.fireProgress)}% damage</span>
+              <span>KEBAKARAN!</span>
+              <span>{Math.round(tile.building.fireProgress)}% kerusakan</span>
             </div>
           </>
         )}
         
         <Separator />
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Service Coverage</div>
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Cakupan Layanan</div>
         
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Police</span>
-            <span>{Math.round(services.police[y][x])}%</span>
+            <span className="text-muted-foreground">Evakuasi</span>
+            <span>{Math.round(services.evacuation[y][x])}%</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Fire</span>
-            <span>{Math.round(services.fire[y][x])}%</span>
+            <span className="text-muted-foreground">Penyelamatan</span>
+            <span>{Math.round(services.rescue[y][x])}%</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Health</span>
-            <span>{Math.round(services.health[y][x])}%</span>
+            <span className="text-muted-foreground">Medis</span>
+            <span>{Math.round(services.medical[y][x])}%</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Education</span>
-            <span>{Math.round(services.education[y][x])}%</span>
+            <span className="text-muted-foreground">Siaga</span>
+            <span>{Math.round(services.preparedness[y][x])}%</span>
           </div>
         </div>
         
         {upgradeInfo && (
           <>
             <Separator />
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Upgrade</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Peningkatan</div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Coverage Range</span>
+                <span className="text-muted-foreground">Jangkauan</span>
                 <span className="font-mono">
-                  {upgradeInfo.currentEffectiveRange} → {upgradeInfo.nextEffectiveRange} tiles
+                  {upgradeInfo.currentEffectiveRange} → {upgradeInfo.nextEffectiveRange} tile
                 </span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Upgrade Cost</span>
+                <span className="text-muted-foreground">Biaya Peningkatan</span>
                 <span className={`font-mono ${upgradeInfo.canAfford ? 'text-foreground' : 'text-red-400'}`}>
                   ${upgradeInfo.cost.toLocaleString()}
                 </span>
@@ -217,21 +224,21 @@ export function TileInfoPanel({
                 className="w-full"
                 size="sm"
               >
-                Upgrade to Level {upgradeInfo.currentLevel + 1}
+                Tingkatkan ke Level {upgradeInfo.currentLevel + 1}
               </Button>
               {!upgradeInfo.canAfford && (
                 <p className="text-xs text-muted-foreground text-center">
-                  Insufficient funds
+                  Dana tidak cukup
                 </p>
               )}
               {upgradeInfo.isUnderConstruction && (
                 <p className="text-xs text-muted-foreground text-center">
-                  Building under construction
+                  Bangunan sedang dibangun
                 </p>
               )}
               {upgradeInfo.isAbandoned && (
                 <p className="text-xs text-muted-foreground text-center">
-                  Building is abandoned
+                  Bangunan ditinggalkan
                 </p>
               )}
             </div>

@@ -607,7 +607,8 @@ export function drawHelicopters(
   hour: number,
   navLightFlashTimer: number,
   isMobile: boolean = false,
-  zoom: number = 1
+  zoom: number = 1,
+  evacuationTint: boolean = false
 ): void {
   if (helicopters.length === 0) return;
 
@@ -736,8 +737,10 @@ export function drawHelicopters(
     const altitudeScale = 0.5 + heli.altitude * 0.3;
     ctx.scale(altitudeScale, altitudeScale);
 
+    const bodyColor = evacuationTint ? '#f97316' : heli.color;
+
     // Main body - oval/teardrop shape
-    ctx.fillStyle = heli.color;
+    ctx.fillStyle = bodyColor;
     ctx.beginPath();
     ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -749,7 +752,7 @@ export function drawHelicopters(
     ctx.fill();
 
     // Tail boom
-    ctx.fillStyle = heli.color;
+    ctx.fillStyle = bodyColor;
     ctx.beginPath();
     ctx.moveTo(-6, -1);
     ctx.lineTo(-16, -0.5);

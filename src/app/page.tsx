@@ -4,18 +4,21 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { GameProvider } from '@/context/GameContext';
 import { MultiplayerContextProvider } from '@/context/MultiplayerContext';
-import Game from '@/components/Game';
-import { CoopModal } from '@/components/multiplayer/CoopModal';
+import { GameShell } from '@/components/GameShell';
+import { MapSelectionScreen } from '@/components/MapSelectionScreen';
 import { useMobile } from '@/hooks/useMobile';
+import { DEV_REGIONS, useDevRegion } from '@/hooks/useDevRegion';
 import { getSpritePack, getSpriteCoords, DEFAULT_SPRITE_PACK_ID } from '@/lib/renderConfig';
-import { SavedCityMeta, GameState } from '@/types/game';
+import { FloodRegion, SavedCityMeta, GameState } from '@/types/game';
 import { decompressFromUTF16, compressToUTF16 } from 'lz-string';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { T } from 'gt-next';
-import { Users, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
-const STORAGE_KEY = 'isocity-game-state';
-const SAVED_CITIES_INDEX_KEY = 'isocity-saved-cities-index';
+import {
+  FLOODGUARD_GAME_STATE_KEY as STORAGE_KEY,
+  FLOODGUARD_SAVED_MAPS_INDEX_KEY as SAVED_CITIES_INDEX_KEY,
+  FLOODGUARD_MAP_PREFIX as SAVED_CITY_PREFIX,
+} from '@/lib/storageKeys';
 
 // Background color to filter from sprite sheets (red)
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
@@ -129,6 +132,7 @@ function saveCityToIndex(state: GameState, roomCode?: string): void {
       gridSize: state.gridSize,
       savedAt: Date.now(),
       roomCode: roomCode,
+      ...(state.selectedRegion ? { selectedRegion: state.selectedRegion } : {}),
     };
     
     // Check if city already exists (by id or roomCode)
@@ -314,19 +318,25 @@ function SavedCityCard({ city, onLoad, onDelete }: { city: SavedCityMeta; onLoad
   );
 }
 
-const SAVED_CITY_PREFIX = 'isocity-city-';
-
 export default function HomePage() {
   const [showGame, setShowGame] = useState(false);
+  const [showMapSelection, setShowMapSelection] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState<FloodRegion | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [savedCities, setSavedCities] = useState<SavedCityMeta[]>([]);
   const [hasSaved, setHasSaved] = useState(false);
-  const [showCoopModal, setShowCoopModal] = useState(false);
-  const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [startFreshGame, setStartFreshGame] = useState(false);
-  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
   const { isMobileDevice, isSmallScreen } = useMobile();
   const isMobile = isMobileDevice || isSmallScreen;
+  const devRegion = useDevRegion();
+
+  // Auto-masuk game saat ?region= / ?wilayah= (dev hook Fase 1)
+  useEffect(() => {
+    if (devRegion.gameState) {
+      setShowGame(true);
+      setStartFreshGame(false);
+    }
+  }, [devRegion.gameState]);
 
   // Check for saved game and room code in URL after mount
   useEffect(() => {
@@ -353,25 +363,58 @@ export default function HomePage() {
   // Handle exit from game - refresh saved cities list
   const handleExitGame = () => {
     setShowGame(false);
-    setIsMultiplayer(false);
+    setShowMapSelection(false);
+    setSelectedRegion(null);
     setStartFreshGame(false);
+    devRegion.clearRegion();
     setSavedCities(loadSavedCities());
     setHasSaved(hasSavedGame());
-    // Clear room code from URL
     window.history.replaceState({}, '', '/');
+  };
+
+  const handlePlayAgain = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // abaikan
+    }
+    setShowGame(false);
+    setShowMapSelection(true);
+    setSelectedRegion(null);
+    setStartFreshGame(false);
+    devRegion.clearRegion();
+  };
+
+  const handleContinue = () => {
+    setSelectedRegion(null);
+    setStartFreshGame(false);
+    setShowGame(true);
+  };
+
+  const handleNewGame = () => {
+    setShowMapSelection(true);
+  };
+
+  const handleSelectRegion = (region: FloodRegion) => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // abaikan
+    }
+    setSelectedRegion(region);
+    setStartFreshGame(false);
+    setShowMapSelection(false);
+    setShowGame(true);
   };
 
   // Load a saved city
   const loadSavedCity = (city: SavedCityMeta) => {
-    // If it's a multiplayer city, navigate to the room
     if (city.roomCode) {
-      window.history.replaceState({}, '', `/coop/${city.roomCode}`);
-      setPendingRoomCode(city.roomCode);
-      setShowCoopModal(true);
+      window.location.href = `/coop/${city.roomCode}`;
       return;
     }
-    
-    // Otherwise load from local storage
+
+    setSelectedRegion(null);
     try {
       const saved = localStorage.getItem(SAVED_CITY_PREFIX + city.id);
       if (saved) {
@@ -400,69 +443,69 @@ export default function HomePage() {
     }
   };
 
-  // Handle co-op game start
-  const handleCoopStart = (isHost: boolean, initialState?: GameState, roomCode?: string) => {
-    setIsMultiplayer(true);
-    
-    if (isHost && initialState) {
-      // Host starts with the state they created - save it so GameProvider loads it
-      try {
-        const compressed = compressToUTF16(JSON.stringify(initialState));
-        localStorage.setItem(STORAGE_KEY, compressed);
-        
-        // Also save to saved cities index so it appears on homepage
-        if (roomCode) {
-          saveCityToIndex(initialState, roomCode);
-        }
-      } catch (e) {
-        console.error('Failed to save co-op state:', e);
-      }
-      setStartFreshGame(false);
-    } else if (isHost) {
-      // Host without state - fallback to fresh game
-      setStartFreshGame(true);
-    } else if (initialState) {
-      // Guest received state from host - save it so GameProvider loads it
-      try {
-        const compressed = compressToUTF16(JSON.stringify(initialState));
-        localStorage.setItem(STORAGE_KEY, compressed);
-        
-        // Also save to saved cities index so it appears on homepage
-        if (roomCode) {
-          saveCityToIndex(initialState, roomCode);
-        }
-      } catch (e) {
-        console.error('Failed to save co-op state:', e);
-      }
-      setStartFreshGame(false);
-    } else {
-      // Guest without state - fallback to fresh game
-      setStartFreshGame(true);
-    }
-    
-    setShowGame(true);
-  };
+  if (showMapSelection) {
+    return (
+      <MapSelectionScreen
+        onSelectRegion={handleSelectRegion}
+        onBack={() => setShowMapSelection(false)}
+      />
+    );
+  }
 
-  if (isChecking) {
+  if (isChecking || devRegion.isLoading) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-white/60"><T>Loading...</T></div>
+        <div className="text-white/60">
+          {devRegion.isLoading && devRegion.region
+            ? `Memuat peta Surabaya ${devRegion.region}…`
+            : <T>Memuat…</T>}
+        </div>
+      </main>
+    );
+  }
+
+  if (devRegion.error && devRegion.hasDevParam) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center px-6 text-center gap-4">
+        <p className="text-red-400/90 max-w-md">{devRegion.error}</p>
+        <p className="text-white/50 text-sm">
+          Contoh: <code className="text-white/70">?region=Timur</code> — pilihan: {DEV_REGIONS.join(', ')}
+        </p>
+        <Button
+          onClick={() => {
+            devRegion.clearRegion();
+            window.history.replaceState({}, '', '/');
+          }}
+          variant="outline"
+          className="text-white/80 border-white/20"
+        >
+          Kembali ke menu
+        </Button>
       </main>
     );
   }
 
   if (showGame) {
-    const gameContent = (
-      <main className="h-screen w-screen overflow-hidden">
-        <Game onExit={handleExitGame} />
-      </main>
-    );
+    const loadingLabel = selectedRegion
+      ? `Memuat peta Surabaya ${selectedRegion}…`
+      : devRegion.region
+        ? `Memuat peta Surabaya ${devRegion.region}…`
+        : undefined;
 
-    // Always wrap in MultiplayerContextProvider so players can invite others from within the game
     return (
       <MultiplayerContextProvider>
-        <GameProvider startFresh={startFreshGame}>
-          {gameContent}
+        <GameProvider
+          startFresh={startFreshGame && !devRegion.gameState && !selectedRegion}
+          initialState={devRegion.gameState ?? undefined}
+          selectedRegion={selectedRegion ?? undefined}
+        >
+          <main className="h-screen w-screen overflow-hidden">
+            <GameShell
+              onExit={handleExitGame}
+              onPlayAgain={handlePlayAgain}
+              loadingMessage={loadingLabel}
+            />
+          </main>
         </GameProvider>
       </MultiplayerContextProvider>
     );
@@ -471,14 +514,13 @@ export default function HomePage() {
   // Mobile landing page
   if (isMobile) {
     return (
-      <MultiplayerContextProvider>
         <main className="h-[100dvh] max-h-[100dvh] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto">
           {/* Spacer to push content down slightly from top */}
           <div className="flex-shrink-0 h-4 sm:h-8" />
           
           {/* Title - smaller on very small screens */}
           <h1 className="text-4xl sm:text-5xl font-light tracking-wider text-white/90 mb-4 sm:mb-6 flex-shrink-0">
-            IsoCity
+            FloodGuard Surabaya
           </h1>
           
           {/* Sprite Gallery - smaller on mobile, contained */}
@@ -488,42 +530,41 @@ export default function HomePage() {
           
           {/* Buttons - more compact */}
           <div className="flex flex-col gap-2 sm:gap-3 w-full max-w-xs flex-shrink-0">
-            <Button 
-              onClick={() => setShowGame(true)}
+            {hasSaved && (
+              <Button
+                onClick={handleContinue}
+                className="w-full py-4 sm:py-6 text-lg sm:text-xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
+              >
+                Lanjutkan
+              </Button>
+            )}
+            <Button
+              onClick={handleNewGame}
               className="w-full py-4 sm:py-6 text-lg sm:text-xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
             >
-              {hasSaved ? <T>Continue</T> : <T>New Game</T>}
-            </Button>
-
-            <Button
-              onClick={() => setShowCoopModal(true)}
-              variant="outline"
-              className="w-full py-4 sm:py-6 text-lg sm:text-xl font-light tracking-wide bg-white/5 hover:bg-white/15 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
-            >
-              <T>Co-op</T>
+              Permainan Baru
             </Button>
 
             <Button
               onClick={async () => {
-                // Clear any room code from URL to prevent multiplayer conflicts
                 if (window.location.search.includes('room=')) {
                   window.history.replaceState({}, '', '/');
-                  setPendingRoomCode(null);
                 }
-                const response = await fetch('/example-states/example_state_9.json');
+                const response = await fetch('/example-states/floodguard_barat.json');
                 const exampleState = await response.json();
                 try {
                   const compressed = compressToUTF16(JSON.stringify(exampleState));
                   localStorage.setItem(STORAGE_KEY, compressed);
                 } catch (e) {
-                  console.error('Failed to save example state:', e);
+                  console.error('Gagal menyimpan contoh:', e);
                 }
+                setSelectedRegion(exampleState.selectedRegion ?? null);
                 setShowGame(true);
               }}
               variant="outline"
               className="w-full py-4 sm:py-6 text-lg sm:text-xl font-light tracking-wide bg-transparent hover:bg-white/10 text-white/40 hover:text-white/60 border border-white/10 rounded-none transition-all duration-300"
             >
-              <T>Load Example</T>
+              Muat Contoh
             </Button>
             <div className="flex items-start justify-between w-full">
               <div className="flex flex-col">
@@ -533,7 +574,7 @@ export default function HomePage() {
                   rel="noopener noreferrer"
                   className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
                 >
-                  <T>Made with Cursor</T>
+                  <T>Dibuat dengan Cursor</T>
                 </a>
                 <a
                   href="https://github.com/amilich/isometric-city"
@@ -541,10 +582,9 @@ export default function HomePage() {
                   rel="noopener noreferrer"
                   className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
                 >
-                  <T>Open GitHub</T>
+                  <T>Buka GitHub</T>
                 </a>
               </div>
-              <LanguageSelector variant="ghost" className="text-white/40 hover:text-white/70 hover:bg-white/10" />
             </div>
           </div>
           
@@ -552,7 +592,7 @@ export default function HomePage() {
           {savedCities.length > 0 && (
             <div className="w-full max-w-xs mt-3 sm:mt-4 flex-1 min-h-0 flex flex-col">
               <h2 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2 flex-shrink-0">
-                <T>Saved Cities</T>
+                <T>Peta Tersimpan</T>
               </h2>
               <div 
                 className="flex flex-col gap-2 flex-1 overflow-y-auto overscroll-y-contain"
@@ -572,65 +612,55 @@ export default function HomePage() {
           
           {/* Bottom spacer */}
           <div className="flex-shrink-0 h-2" />
-          
-          {/* Co-op Modal */}
-          <CoopModal
-            open={showCoopModal}
-            onOpenChange={setShowCoopModal}
-            onStartGame={handleCoopStart}
-            pendingRoomCode={pendingRoomCode}
-          />
         </main>
-      </MultiplayerContextProvider>
     );
   }
 
   // Desktop landing page
   return (
-    <MultiplayerContextProvider>
       <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-8">
         <div className="max-w-7xl w-full grid lg:grid-cols-2 gap-16 items-center">
           
           {/* Left - Title and Start Button */}
           <div className="flex flex-col items-center lg:items-start justify-center space-y-12">
             <h1 className="text-8xl font-light tracking-wider text-white/90">
-              IsoCity
+              FloodGuard Surabaya
             </h1>
             <div className="flex flex-col gap-3">
-              <Button 
-                onClick={() => setShowGame(true)}
+              {hasSaved && (
+                <Button
+                  onClick={handleContinue}
+                  className="w-64 py-8 text-2xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
+                >
+                  Lanjutkan
+                </Button>
+              )}
+              <Button
+                onClick={handleNewGame}
                 className="w-64 py-8 text-2xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
               >
-                {hasSaved ? <T>Continue</T> : <T>New Game</T>}
-              </Button>
-              <Button
-                onClick={() => setShowCoopModal(true)}
-                variant="outline"
-                className="w-64 py-8 text-2xl font-light tracking-wide bg-white/5 hover:bg-white/15 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
-              >
-                <T>Co-op</T>
+                Permainan Baru
               </Button>
               <Button
                 onClick={async () => {
-                  // Clear any room code from URL to prevent multiplayer conflicts
                   if (window.location.search.includes('room=')) {
                     window.history.replaceState({}, '', '/');
-                    setPendingRoomCode(null);
                   }
-                  const response = await fetch('/example-states/example_state_9.json');
+                  const response = await fetch('/example-states/floodguard_barat.json');
                   const exampleState = await response.json();
                   try {
                     const compressed = compressToUTF16(JSON.stringify(exampleState));
                     localStorage.setItem(STORAGE_KEY, compressed);
                   } catch (e) {
-                    console.error('Failed to save example state:', e);
+                    console.error('Gagal menyimpan contoh:', e);
                   }
+                  setSelectedRegion(exampleState.selectedRegion ?? null);
                   setShowGame(true);
                 }}
                 variant="outline"
                 className="w-64 py-8 text-2xl font-light tracking-wide bg-transparent hover:bg-white/10 text-white/40 hover:text-white/60 border border-white/10 rounded-none transition-all duration-300"
               >
-                <T>Load Example</T>
+                Muat Contoh
               </Button>
               <div className="flex items-start justify-between w-64">
                 <div className="flex flex-col">
@@ -640,7 +670,7 @@ export default function HomePage() {
                     rel="noopener noreferrer"
                     className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
                   >
-                    <T>Made with Cursor</T>
+                    <T>Dibuat dengan Cursor</T>
                   </a>
                   <a
                     href="https://github.com/amilich/isometric-city"
@@ -648,10 +678,9 @@ export default function HomePage() {
                     rel="noopener noreferrer"
                     className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
                   >
-                    <T>Open GitHub</T>
+                    <T>Buka GitHub</T>
                   </a>
                 </div>
-                <LanguageSelector variant="ghost" className="text-white/40 hover:text-white/70 hover:bg-white/10" />
               </div>
             </div>
             
@@ -659,7 +688,7 @@ export default function HomePage() {
             {savedCities.length > 0 && (
               <div className="w-64">
                 <h2 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2">
-                  <T>Saved Cities</T>
+                  <T>Peta Tersimpan</T>
                 </h2>
                 <div 
                   className="flex flex-col gap-2 max-h-64 overflow-y-auto overscroll-y-contain"
@@ -683,15 +712,6 @@ export default function HomePage() {
             <SpriteGallery count={16} />
           </div>
         </div>
-        
-        {/* Co-op Modal */}
-        <CoopModal
-          open={showCoopModal}
-          onOpenChange={setShowCoopModal}
-          onStartGame={handleCoopStart}
-          pendingRoomCode={pendingRoomCode}
-        />
       </main>
-    </MultiplayerContextProvider>
   );
 }

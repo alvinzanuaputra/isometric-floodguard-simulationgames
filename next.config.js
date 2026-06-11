@@ -6,4 +6,8 @@ const nextConfig = {
   reactCompiler: true,
 };
 
-module.exports = withGTConfig(nextConfig);
+module.exports = withGTConfig({
+  ...nextConfig,
+  defaultLocale: 'id',
+  locales: ['id'],
+});

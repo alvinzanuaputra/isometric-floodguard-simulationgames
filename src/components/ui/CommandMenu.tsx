@@ -33,17 +33,17 @@ interface MenuItem {
 }
 
 const MENU_CATEGORIES = [
-  { key: 'tools', label: msg('Tools') },
-  { key: 'zones', label: msg('Zones') },
-  { key: 'zoning', label: msg('Zoning') },
-  { key: 'services', label: msg('Services') },
-  { key: 'parks', label: msg('Parks') },
-  { key: 'sports', label: msg('Sports') },
-  { key: 'waterfront', label: msg('Waterfront') },
-  { key: 'community', label: msg('Community') },
-  { key: 'utilities', label: msg('Utilities') },
-  { key: 'special', label: msg('Special') },
-  { key: 'panels', label: msg('Panels') },
+  { key: 'tools', label: msg('Alat') },
+  { key: 'zones', label: msg('Zona') },
+  { key: 'zoning', label: msg('Zonasi') },
+  { key: 'services', label: msg('Layanan') },
+  { key: 'parks', label: msg('Taman') },
+  { key: 'sports', label: msg('Olahraga') },
+  { key: 'waterfront', label: msg('Pesisir') },
+  { key: 'community', label: msg('Komunitas') },
+  { key: 'utilities', label: msg('Utilitas') },
+  { key: 'special', label: msg('Khusus') },
+  { key: 'panels', label: msg('Panel') },
 ] as const;
 
 // Build menu items from tools
@@ -220,10 +220,10 @@ function buildMenuItems(): MenuItem[] {
 
   // Panels
   const panels: { panel: 'budget' | 'statistics' | 'advisors' | 'settings'; name: string; description: string; keywords: string[] }[] = [
-    { panel: 'budget', name: 'Budget', description: 'Manage city finances and funding', keywords: ['budget', 'money', 'finance', 'tax', 'funding'] },
-    { panel: 'statistics', name: 'Statistics', description: 'View city statistics and charts', keywords: ['statistics', 'stats', 'charts', 'data', 'info'] },
-    { panel: 'advisors', name: 'Advisors', description: 'Get advice from city advisors', keywords: ['advisors', 'advice', 'help', 'tips'] },
-    { panel: 'settings', name: 'Settings', description: 'Game settings and preferences', keywords: ['settings', 'options', 'preferences', 'config'] },
+    { panel: 'budget', name: 'Anggaran', description: 'Kelola keuangan dan pendanaan wilayah', keywords: ['anggaran', 'budget', 'uang', 'pajak', 'dana'] },
+    { panel: 'statistics', name: 'Statistik', description: 'Lihat statistik dan grafik wilayah', keywords: ['statistik', 'stats', 'grafik', 'data', 'info'] },
+    { panel: 'advisors', name: 'Penasihat', description: 'Saran dari penasihat kota', keywords: ['penasihat', 'advisors', 'saran', 'tips'] },
+    { panel: 'settings', name: 'Pengaturan', description: 'Pengaturan permainan', keywords: ['pengaturan', 'settings', 'opsi', 'preferensi'] },
   ];
 
   panels.forEach(({ panel, name, description, keywords }) => {
@@ -410,7 +410,7 @@ export function CommandMenu() {
             ref={inputRef}
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search tools, buildings, panels..."
+            placeholder="Cari alat, bangunan, panel..."
             className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent h-12 text-sm"
           />
           <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border border-sidebar-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">

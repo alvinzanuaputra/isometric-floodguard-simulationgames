@@ -9,8 +9,10 @@ import { GameState } from '@/types/game';
 import { compressToUTF16 } from 'lz-string';
 import { useParams, useRouter } from 'next/navigation';
 
-const STORAGE_KEY = 'isocity-game-state';
-const SAVED_CITIES_INDEX_KEY = 'isocity-saved-cities-index';
+import {
+  FLOODGUARD_GAME_STATE_KEY as STORAGE_KEY,
+  FLOODGUARD_SAVED_MAPS_INDEX_KEY as SAVED_CITIES_INDEX_KEY,
+} from '@/lib/storageKeys';
 
 // Save a city to the saved cities index (for multiplayer cities)
 function saveCityToIndex(state: GameState, roomCode?: string): void {

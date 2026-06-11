@@ -4,6 +4,7 @@
  */
 
 import { Tile, ZoneType } from '@/types/game';
+import { elevationToTier } from '@/lib/mapLoader';
 import { TILE_WIDTH, TILE_HEIGHT } from './types';
 
 // ============================================================================
@@ -91,6 +92,44 @@ export const FOUNDATION_COLORS: TileColorScheme = {
   stroke: '#6b4423',  // Dark brown stroke
 };
 
+/**
+ * Warna terrain per tier elevasi (peta wilayah Surabaya — floodguard-plan.md §6.3):
+ * tier 0–1 biru gelap (dataran sangat rendah, rawan banjir), 2–3 hijau kekuningan,
+ * 4–5 hijau, 6–7 hijau tua/coklat, 8–9 coklat/abu (dataran tinggi).
+ */
+export const TERRAIN_TIER_COLORS: TileColorScheme[] = [
+  { top: '#2c4a6e', left: '#223a57', right: '#3a5c84', stroke: '#1a2c42' }, // tier 0
+  { top: '#36597d', left: '#2a4663', right: '#446b93', stroke: '#20354b' }, // tier 1
+  { top: '#8a9a4a', left: '#6f7d3b', right: '#9dad5c', stroke: '#535d2c' }, // tier 2
+  { top: '#7d944a', left: '#64773b', right: '#90a75c', stroke: '#4b592c' }, // tier 3
+  { top: '#5a8f4f', left: '#48733f', right: '#6ca35f', stroke: '#36562f' }, // tier 4
+  { top: '#4a7c3f', left: '#3b6332', right: '#5a8f4f', stroke: '#2c4a26' }, // tier 5
+  { top: '#3f6a35', left: '#32552a', right: '#4d7d41', stroke: '#264020' }, // tier 6
+  { top: '#5d6238', left: '#4a4e2d', right: '#707646', stroke: '#383b22' }, // tier 7
+  { top: '#6e5b44', left: '#584936', right: '#826d53', stroke: '#423729' }, // tier 8
+  { top: '#7a7a72', left: '#62625b', right: '#8f8f86', stroke: '#4a4a44' }, // tier 9
+];
+
+/** Warna tile non-playable (padding/void di luar area data wilayah). */
+export const NON_PLAYABLE_COLORS: TileColorScheme = {
+  top: '#252b33',
+  left: '#1d2228',
+  right: '#2d343d',
+  stroke: '#16191e',
+};
+
+/**
+ * Warna terrain berbasis elevasi untuk tile peta wilayah Surabaya.
+ * Mengembalikan null untuk peta procedural IsoCity lama (elevation sentinel -1
+ * atau undefined pada save lama) — pemanggil memakai warna zona seperti biasa.
+ */
+export function getTerrainColors(tile: Tile): TileColorScheme | null {
+  const elevation = tile.elevation ?? -1;
+  if (tile.playable === false) return NON_PLAYABLE_COLORS;
+  if (elevation < 0) return null;
+  return TERRAIN_TIER_COLORS[elevationToTier(elevation)];
+}
+
 // ============================================================================
 // Geometry Helpers
 // ============================================================================
@@ -166,7 +205,9 @@ export function drawIsometricDiamond(
 
 /**
  * Draw a green base tile for grass/empty tiles.
- * Colors are determined by the tile's zone.
+ * Colors are determined by the tile's zone — kecuali pada peta wilayah Surabaya
+ * (tile.elevation >= 0): tile tanpa zona diwarnai per tier elevasi, dan tile
+ * non-playable (padding) diwarnai netral gelap.
  */
 export function drawGreenBaseTile(
   ctx: CanvasRenderingContext2D,
@@ -175,7 +216,8 @@ export function drawGreenBaseTile(
   tile: Tile,
   currentZoom: number
 ): void {
-  const colors = ZONE_COLORS[tile.zone];
+  const terrainColors = tile.zone === 'none' ? getTerrainColors(tile) : null;
+  const colors = terrainColors ?? ZONE_COLORS[tile.zone];
 
   // Draw the base diamond with stroke only when zoomed in
   drawIsometricDiamond(ctx, x, y, colors, {

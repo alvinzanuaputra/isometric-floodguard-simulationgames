@@ -9,14 +9,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Translatable UI labels
 const UI_LABELS = {
-  cityStatistics: msg('City Statistics'),
-  population: msg('Population'),
-  jobs: msg('Jobs'),
-  treasury: msg('Treasury'),
-  weekly: msg('Weekly'),
-  money: msg('Money'),
-  happiness: msg('Happiness'),
-  notEnoughData: msg('Not enough data yet. Keep playing to see historical trends.'),
+  cityStatistics: msg('Statistik Kota'),
+  population: msg('Populasi'),
+  jobs: msg('Pekerjaan'),
+  treasury: msg('Kas'),
+  weekly: msg('Mingguan'),
+  money: msg('Uang'),
+  happiness: msg('Kebahagiaan'),
+  notEnoughData: msg('Data belum cukup. Terus bermain untuk melihat tren historis.'),
 };
 
 export function StatisticsPanel() {

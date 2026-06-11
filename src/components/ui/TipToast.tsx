@@ -71,7 +71,7 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
           {/* Message */}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground leading-relaxed">
-              {m(message)}
+              {message}
             </p>
           </div>
           
@@ -79,7 +79,7 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
           <button
             onClick={onContinue}
             className="flex-shrink-0 p-1 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={gt('Dismiss tip')}
+            aria-label={gt('Tutup tips')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -95,7 +95,7 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
           >
             <T>
               <SkipForward className="w-3.5 h-3.5" />
-              Skip All Tips
+              Lewati Semua Tips
             </T>
           </Button>
           <Button
@@ -105,7 +105,7 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
             className="text-xs gap-1"
           >
             <T>
-              Continue
+              Lanjut
               <ArrowRight className="w-3.5 h-3.5" />
             </T>
           </Button>

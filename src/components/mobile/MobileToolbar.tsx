@@ -4,8 +4,11 @@ import React, { useState } from 'react';
 import { msg, useMessages } from 'gt-next';
 import { useGame } from '@/context/GameContext';
 import { Tool, TOOL_INFO } from '@/types/game';
+import { FLOODGUARD_SIDEBAR } from '@/lib/floodTools';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { OverlayMode } from '@/components/game/types';
+import { FLOODGUARD_OVERLAY_TOGGLE_MODES, OVERLAY_CONFIG, getOverlayButtonClass } from '@/components/game/overlays';
 import {
   CloseIcon,
   RoadIcon,
@@ -23,6 +26,7 @@ import {
   HealthIcon,
   EducationIcon,
   SafetyIcon,
+  ToolIcons,
 } from '@/components/ui/Icons';
 
 // Tool category icons
@@ -196,34 +200,36 @@ const QuickToolIcons: Partial<Record<Tool, React.ReactNode>> = {
 
 // Category labels for translation
 const CATEGORY_LABELS: Record<string, unknown> = {
-  'TOOLS': msg('Tools'),
-  'ZONES': msg('Zones'),
-  'EXPAND_CITY': msg('Expand City'),
-  'ZONING': msg('Zoning'),
-  'UTILITIES': msg('Utilities'),
-  'SERVICES': msg('Services'),
-  'PARKS': msg('Parks'),
-  'SPORTS': msg('Sports'),
-  'WATERFRONT': msg('Waterfront'),
-  'COMMUNITY': msg('Community'),
-  'SPECIAL': msg('Special'),
+  ALAT: msg('Alat'),
+  INFRA: msg('Infrastruktur Banjir'),
+  HIJAU: msg('Ruang Hijau'),
+  TOOLS: msg('Alat'),
+  ZONES: msg('Zona'),
+  EXPAND_CITY: msg('Perluas Kota'),
+  ZONING: msg('Zonasi'),
+  UTILITIES: msg('Utilitas'),
+  SERVICES: msg('Layanan'),
+  PARKS: msg('Taman'),
+  SPORTS: msg('Olahraga'),
+  WATERFRONT: msg('Pesisir'),
+  COMMUNITY: msg('Komunitas'),
+  SPECIAL: msg('Khusus'),
 };
 
-// UI labels for translation
 const UI_LABELS = {
-  viewOverlays: msg('View Overlays'),
-  none: msg('None'),
-  power: msg('Power'),
-  water: msg('Water'),
-  fire: msg('Fire'),
-  police: msg('Police'),
-  health: msg('Health'),
-  education: msg('Education'),
-  subway: msg('Subway'),
-  budget: msg('Budget'),
-  statistics: msg('Statistics'),
-  advisors: msg('Advisors'),
-  settings: msg('Settings'),
+  viewOverlays: msg('Overlay Peta'),
+  none: msg('Matikan'),
+  power: msg('Listrik'),
+  water: msg('Air'),
+  fire: msg('Kebakaran'),
+  police: msg('Polisi'),
+  health: msg('Kesehatan'),
+  education: msg('Pendidikan'),
+  subway: msg('Metro'),
+  budget: msg('Anggaran'),
+  statistics: msg('Statistik'),
+  advisors: msg('Penasihat'),
+  settings: msg('Pengaturan'),
 };
 
 const toolCategories = {
@@ -239,8 +245,6 @@ const toolCategories = {
   'SPECIAL': ['stadium', 'museum', 'airport', 'space_program', 'city_hall', 'amusement_park'] as Tool[],
 };
 
-type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway';
-
 interface MobileToolbarProps {
   onOpenPanel: (panel: 'budget' | 'statistics' | 'advisors' | 'settings') => void;
   overlayMode?: OverlayMode;
@@ -249,7 +253,15 @@ interface MobileToolbarProps {
 
 export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMode }: MobileToolbarProps) {
   const { state, setTool, expandCity, shrinkCity } = useGame();
-  const { selectedTool, stats } = state;
+  const { selectedTool, stats, selectedRegion } = state;
+  const isFloodGuard = !!selectedRegion;
+  const activeToolCategories = isFloodGuard
+    ? {
+        ALAT: FLOODGUARD_SIDEBAR.tools,
+        INFRA: FLOODGUARD_SIDEBAR.infra,
+        HIJAU: FLOODGUARD_SIDEBAR.green,
+      }
+    : toolCategories;
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [expandCityExpanded, setExpandCityExpanded] = useState(false);
@@ -392,7 +404,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
             {/* City Management section at top */}
             <div className="p-3 border-b border-border flex-shrink-0">
               <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                {m(msg('City Management'))}
+                {m(msg('Manajemen Wilayah'))}
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <Button
@@ -436,71 +448,24 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
                   {m(UI_LABELS.viewOverlays)}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
-                  <Button
-                    variant={overlayMode === 'none' ? 'default' : 'ghost'}
-                    size="sm"
-                    className="h-10 w-full text-xs"
-                    onClick={() => setOverlayMode('none')}
-                  >
-                    {m(UI_LABELS.none)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'power' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'power' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
-                    onClick={() => setOverlayMode('power')}
-                  >
-                    {m(UI_LABELS.power)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'water' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'water' ? 'bg-blue-500 hover:bg-blue-600' : ''}`}
-                    onClick={() => setOverlayMode('water')}
-                  >
-                    {m(UI_LABELS.water)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'fire' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'fire' ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                    onClick={() => setOverlayMode('fire')}
-                  >
-                    {m(UI_LABELS.fire)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'police' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'police' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-                    onClick={() => setOverlayMode('police')}
-                  >
-                    {m(UI_LABELS.police)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'health' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'health' ? 'bg-green-500 hover:bg-green-600' : ''}`}
-                    onClick={() => setOverlayMode('health')}
-                  >
-                    {m(UI_LABELS.health)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'education' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'education' ? 'bg-purple-500 hover:bg-purple-600' : ''}`}
-                    onClick={() => setOverlayMode('education')}
-                  >
-                    {m(UI_LABELS.education)}
-                  </Button>
-                  <Button
-                    variant={overlayMode === 'subway' ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`h-10 w-full text-xs ${overlayMode === 'subway' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}
-                    onClick={() => setOverlayMode('subway')}
-                  >
-                    {m(UI_LABELS.subway)}
-                  </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  {FLOODGUARD_OVERLAY_TOGGLE_MODES.map((mode) => {
+                    const config = OVERLAY_CONFIG[mode];
+                    const isActive = overlayMode === mode;
+                    const label = mode === 'none' ? 'Matikan' : config.label;
+                    return (
+                      <Button
+                        key={mode}
+                        variant={isActive ? 'default' : 'ghost'}
+                        size="sm"
+                        className={`h-10 w-full text-xs ${getOverlayButtonClass(mode, isActive)}`}
+                        onClick={() => setOverlayMode(mode)}
+                        title={config.title}
+                      >
+                        {label}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -508,7 +473,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               <div className="p-2 space-y-1 pb-4">
                 {/* Category buttons */}
-                {Object.entries(toolCategories).map(([category, tools]) => (
+                {Object.entries(activeToolCategories).map(([category, tools]) => (
                   <div key={category}>
                     {/* Expand City section - appears before ZONING */}
                     {category === 'ZONING' && (
@@ -576,6 +541,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                           const info = TOOL_INFO[tool];
                           if (!info) return null;
                           const canAfford = stats.money >= info.cost;
+                          const ToolIcon = ToolIcons[tool];
 
                           return (
                             <Button
@@ -585,6 +551,9 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                               disabled={!canAfford && info.cost > 0}
                               onClick={() => handleToolSelect(tool, true)}
                             >
+                              {ToolIcon && (
+                                <ToolIcon size={18} className="shrink-0 opacity-80" />
+                              )}
                               <span className="flex-1 text-left">{m(info.name)}</span>
                               {info.cost > 0 && (
                                 <span className={`text-xs font-mono ${canAfford ? 'text-green-400' : 'text-red-400'}`}>

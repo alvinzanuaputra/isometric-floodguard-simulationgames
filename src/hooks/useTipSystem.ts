@@ -2,156 +2,119 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState } from '@/types/game';
-import { msg } from 'gt-next';
+import {
+  FLOODGUARD_TIPS_DISABLED_KEY as STORAGE_KEY,
+  FLOODGUARD_TIPS_SHOWN_KEY as SHOWN_TIPS_KEY,
+} from '@/lib/storageKeys';
+import { REGION_WIN_LOSE } from '@/lib/regionConfig';
 
-// Tip definitions with their conditions and messages
-export type TipId = 
-  | 'get_started'
-  | 'needs_utilities'
-  | 'negative_demand'
-  | 'needs_safety_services'
-  | 'needs_parks'
-  | 'needs_health_education';
+// Tips mekanik FloodGuard — Bahasa Indonesia (Fase 7)
+export type TipId =
+  | 'selamat_datang'
+  | 'overlay_risiko'
+  | 'alat_mitigasi'
+  | 'musim_hujan'
+  | 'prakiraan_cuaca'
+  | 'target_menang';
 
 export interface TipDefinition {
   id: TipId;
   message: string;
-  priority: number; // Lower number = higher priority
+  priority: number;
   check: (state: GameState) => boolean;
 }
 
-// Define all tips with their conditions
+function hasBuildingType(state: GameState, type: string): boolean {
+  for (let y = 0; y < state.gridSize; y++) {
+    for (let x = 0; x < state.gridSize; x++) {
+      if (state.grid[y][x].building.type === type) return true;
+    }
+  }
+  return false;
+}
+
+function countMitigationTools(state: GameState): number {
+  const types = new Set(['flood_pump', 'levee', 'retention_pond', 'drain_channel', 'evacuation_post']);
+  let count = 0;
+  for (let y = 0; y < state.gridSize; y++) {
+    for (let x = 0; x < state.gridSize; x++) {
+      if (types.has(state.grid[y][x].building.type)) count++;
+    }
+  }
+  return count;
+}
+
 const TIP_DEFINITIONS: TipDefinition[] = [
   {
-    id: 'get_started',
-    message: msg('Welcome! Start by zoning areas for residential, commercial, and industrial buildings. Then add roads, power, and water to build your city.'),
-    priority: 0, // Highest priority - shows first on fresh cities
-    check: (state: GameState) => {
-      // Check if this is a fresh/empty city - no zones placed yet
-      let hasAnyZone = false;
-      let hasAnyBuilding = false;
-      
-      for (let y = 0; y < state.gridSize; y++) {
-        for (let x = 0; x < state.gridSize; x++) {
-          const tile = state.grid[y][x];
-          if (tile.zone !== 'none') {
-            hasAnyZone = true;
-          }
-          const type = tile.building.type;
-          // Check for any placed buildings (not natural terrain)
-          if (type !== 'grass' && type !== 'water' && type !== 'tree') {
-            hasAnyBuilding = true;
-          }
-        }
-      }
-      
-      // Show on fresh cities with no zones and no buildings
-      return !hasAnyZone && !hasAnyBuilding;
+    id: 'selamat_datang',
+    message:
+      'Selamat datang di FloodGuard Surabaya! Pilih alat mitigasi banjir di sidebar, lalu bangun pompa, tanggul, dan saluran drainase di area rawan rendah.',
+    priority: 0,
+    check: (state) => {
+      if (!state.selectedRegion) return false;
+      return countMitigationTools(state) < 2;
     },
   },
   {
-    id: 'needs_utilities',
-    message: msg('Buildings need power, water, and roads for construction to begin.'),
+    id: 'overlay_risiko',
+    message:
+      'Buka overlay «Risiko Banjir» di bilah atas untuk melihat area rawan (merah) dan aman (hijau) berdasarkan elevasi wilayah.',
     priority: 1,
-    check: (state: GameState) => {
-      // Check if there are zoned tiles (even just grass) but no utilities infrastructure
-      let hasZonedTiles = false;
-      let hasPowerPlant = false;
-      let hasWaterTower = false;
-      let hasRoad = false;
-      
-      for (let y = 0; y < state.gridSize; y++) {
-        for (let x = 0; x < state.gridSize; x++) {
-          const tile = state.grid[y][x];
-          if (tile.zone !== 'none') {
-            hasZonedTiles = true;
-          }
-          const type = tile.building.type;
-          if (type === 'power_plant') hasPowerPlant = true;
-          if (type === 'water_tower') hasWaterTower = true;
-          if (type === 'road' || type === 'bridge') hasRoad = true;
-        }
-      }
-      
-      // Trigger if: have zones but missing any utility infrastructure
-      return hasZonedTiles && (!hasPowerPlant || !hasWaterTower || !hasRoad);
+    check: (state) => {
+      if (!state.selectedRegion) return false;
+      return countMitigationTools(state) < 4;
     },
   },
   {
-    id: 'negative_demand',
-    message: msg('Keep an eye on zone demand. Negative demand can cause buildings to become abandoned.'),
+    id: 'alat_mitigasi',
+    message:
+      'Pompa menurunkan genangan di sekitarnya, tanggul menghalangi aliran air, waduk menampung kelebihan air, dan saluran drainase mempercepat resapan.',
     priority: 2,
-    check: (state: GameState) => {
-      const { residential, commercial, industrial } = state.stats.demand;
-      // Check if any demand is significantly negative
-      return residential < -20 || commercial < -20 || industrial < -20;
+    check: (state) => {
+      if (!state.selectedRegion) return false;
+      const hasPump = hasBuildingType(state, 'flood_pump');
+      const hasLevee = hasBuildingType(state, 'levee');
+      return !hasPump || !hasLevee;
     },
   },
   {
-    id: 'needs_safety_services',
-    message: msg('Add fire and police stations to keep your city safe from crime and fires.'),
+    id: 'musim_hujan',
+    message:
+      'Surabaya memasuki musim hujan Nov–Apr. Siapkan infrastruktur sebelum curah hujan naik — genangan menyebar mengikuti elevasi terrain.',
     priority: 3,
-    check: (state: GameState) => {
-      // Check if there are buildings but no fire/police stations
-      let hasBuildings = false;
-      let hasFireStation = false;
-      let hasPoliceStation = false;
-      
-      for (let y = 0; y < state.gridSize; y++) {
-        for (let x = 0; x < state.gridSize; x++) {
-          const type = state.grid[y][x].building.type;
-          if (type === 'fire_station') hasFireStation = true;
-          if (type === 'police_station') hasPoliceStation = true;
-          
-          // Check for any developed zone buildings
-          const zone = state.grid[y][x].zone;
-          if (zone !== 'none' && type !== 'grass') {
-            hasBuildings = true;
-          }
-        }
-      }
-      
-      // Has at least 50 population but no safety services
-      return hasBuildings && state.stats.population >= 50 && (!hasFireStation || !hasPoliceStation);
+    check: (state) => {
+      if (!state.selectedRegion) return false;
+      return state.weatherState?.isRainySeason === true;
     },
   },
   {
-    id: 'needs_parks',
-    message: msg('Add parks and trees to improve your city\'s environment and make residents happier.'),
+    id: 'prakiraan_cuaca',
+    message:
+      'Perhatikan prakiraan cuaca 6 jam di bilah atas. Rencanakan penempatan pompa dan tanggul sebelum event Hujan atau Badai dimulai.',
     priority: 4,
-    check: (state: GameState) => {
-      // Check if environment score is low
-      return state.stats.environment < 40 && state.stats.population >= 100;
+    check: (state) => {
+      if (!state.selectedRegion || !state.weatherState) return false;
+      const forecast = state.weatherState.forecastHours ?? [];
+      return forecast.some((h) => h >= 10);
     },
   },
   {
-    id: 'needs_health_education',
-    message: msg('Build hospitals and schools to improve health and education for your citizens.'),
+    id: 'target_menang',
+    message:
+      'Target menang: bertahan selama hari event hujan yang ditetapkan wilayah tanpa melampaui batas genangan. Cek Indeks Keselamatan di bilah atas.',
     priority: 5,
-    check: (state: GameState) => {
-      // Check if there's population but no hospitals or schools
-      let hasHospital = false;
-      let hasSchool = false;
-      
-      for (let y = 0; y < state.gridSize; y++) {
-        for (let x = 0; x < state.gridSize; x++) {
-          const type = state.grid[y][x].building.type;
-          if (type === 'hospital') hasHospital = true;
-          if (type === 'school' || type === 'university') hasSchool = true;
-        }
-      }
-      
-      // Has at least 100 population but no health/education
-      return state.stats.population >= 100 && (!hasHospital || !hasSchool);
+    check: (state) => {
+      if (!state.selectedRegion || !state.floodStats) return false;
+      const region = state.selectedRegion;
+      const winDays = REGION_WIN_LOSE[region]?.winSurvivalDays ?? state.floodStats.winTargetDays;
+      return state.floodStats.winTargetDays === winDays && state.gameStatus === 'playing';
     },
   },
 ];
 
-const STORAGE_KEY = 'isocity-tips-disabled';
-const SHOWN_TIPS_KEY = 'isocity-tips-shown';
-const MIN_TIP_INTERVAL_MS = 15000; // Minimum 15 seconds between tips
-const TIP_CHECK_INTERVAL_MS = 5000; // Check for tip conditions every 5 seconds
-const INITIAL_TIP_DELAY_MS = 3000; // Wait 3 seconds before first tip
+const MIN_TIP_INTERVAL_MS = 15000;
+const TIP_CHECK_INTERVAL_MS = 5000;
+const INITIAL_TIP_DELAY_MS = 3000;
 
 interface UseTipSystemReturn {
   currentTip: string | null;
@@ -170,21 +133,19 @@ export function useTipSystem(state: GameState): UseTipSystemReturn {
   const lastTipTimeRef = useRef<number>(0);
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasLoadedRef = useRef(false);
-  
-  // Use a ref to always have the latest state without causing effect re-runs
+
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Load preferences from localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     try {
       const disabled = localStorage.getItem(STORAGE_KEY);
       if (disabled === 'true') {
         setTipsEnabledState(false);
       }
-      
+
       const shown = localStorage.getItem(SHOWN_TIPS_KEY);
       if (shown) {
         const parsed = JSON.parse(shown);
@@ -193,32 +154,30 @@ export function useTipSystem(state: GameState): UseTipSystemReturn {
         }
       }
     } catch (e) {
-      console.error('Failed to load tip preferences:', e);
+      console.error('Gagal memuat preferensi tips:', e);
     }
-    
+
     hasLoadedRef.current = true;
   }, []);
 
-  // Save shown tips to localStorage when they change
   useEffect(() => {
     if (!hasLoadedRef.current) return;
     if (typeof window === 'undefined') return;
-    
+
     try {
       localStorage.setItem(SHOWN_TIPS_KEY, JSON.stringify(Array.from(shownTips)));
     } catch (e) {
-      console.error('Failed to save shown tips:', e);
+      console.error('Gagal menyimpan tips yang sudah ditampilkan:', e);
     }
   }, [shownTips]);
 
-  // Set tips enabled preference
   const setTipsEnabled = useCallback((enabled: boolean) => {
     setTipsEnabledState(enabled);
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(STORAGE_KEY, enabled ? 'false' : 'true');
       } catch (e) {
-        console.error('Failed to save tip preference:', e);
+        console.error('Gagal menyimpan preferensi tips:', e);
       }
     }
     if (!enabled) {
@@ -227,61 +186,52 @@ export function useTipSystem(state: GameState): UseTipSystemReturn {
     }
   }, []);
 
-  // Track shown tips in a ref as well for synchronous access
   const shownTipsRef = useRef<Set<TipId>>(new Set());
-  
-  // Keep ref in sync with state
+
   useEffect(() => {
     shownTipsRef.current = shownTips;
   }, [shownTips]);
 
-  // Check for conditions and show tip - uses refs to get latest values
   const checkAndShowTip = useCallback(() => {
     if (!hasLoadedRef.current) return;
     if (!tipsEnabled) return;
     if (isVisible) return;
-    
+
     const now = Date.now();
-    
-    // Rate limiting - don't show tips too frequently (skip for first tip)
     if (lastTipTimeRef.current > 0 && now - lastTipTimeRef.current < MIN_TIP_INTERVAL_MS) {
       return;
     }
-    
+
     const currentState = stateRef.current;
+    if (!currentState.selectedRegion) return;
+
     const currentShownTips = shownTipsRef.current;
-    
-    // Find the first applicable tip that hasn't been shown
     const applicableTips = TIP_DEFINITIONS
-      .filter(tip => !currentShownTips.has(tip.id) && tip.check(currentState))
+      .filter((tip) => !currentShownTips.has(tip.id) && tip.check(currentState))
       .sort((a, b) => a.priority - b.priority);
-    
+
     if (applicableTips.length > 0) {
       const tip = applicableTips[0];
       setCurrentTip(tip.message);
       setIsVisible(true);
       lastTipTimeRef.current = now;
-      setShownTips(prev => new Set([...prev, tip.id]));
+      setShownTips((prev) => new Set([...prev, tip.id]));
     }
   }, [tipsEnabled, isVisible]);
 
-  // Set up periodic check for tip conditions
   useEffect(() => {
-    // Clear any existing interval
     if (checkIntervalRef.current) {
       clearInterval(checkIntervalRef.current);
     }
-    
+
     if (!tipsEnabled) return;
-    
-    // Initial check after a short delay (give time for game to initialize)
+
     const initialTimeout = setTimeout(() => {
       checkAndShowTip();
     }, INITIAL_TIP_DELAY_MS);
-    
-    // Set up periodic checking
+
     checkIntervalRef.current = setInterval(checkAndShowTip, TIP_CHECK_INTERVAL_MS);
-    
+
     return () => {
       clearTimeout(initialTimeout);
       if (checkIntervalRef.current) {
@@ -290,16 +240,13 @@ export function useTipSystem(state: GameState): UseTipSystemReturn {
     };
   }, [tipsEnabled, checkAndShowTip]);
 
-  // Handle continue button - dismiss current tip
   const onContinue = useCallback(() => {
     setIsVisible(false);
-    // Small delay before clearing the message to allow exit animation
     setTimeout(() => {
       setCurrentTip(null);
     }, 300);
   }, []);
 
-  // Handle skip all button - disable tips permanently
   const onSkipAll = useCallback(() => {
     setTipsEnabled(false);
     setIsVisible(false);

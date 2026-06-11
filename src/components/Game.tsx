@@ -32,14 +32,21 @@ import {
   SettingsPanel,
   AdvisorsPanel,
 } from '@/components/game/panels';
+import { FloodResultDialog } from '@/components/game/panels/FloodResultDialog';
 import { MiniMap } from '@/components/game/MiniMap';
 import { TopBar, StatsPanel } from '@/components/game/TopBar';
 import { CanvasIsometricGrid } from '@/components/game/CanvasIsometricGrid';
 
 // Cargo type names for notifications
-const CARGO_TYPE_NAMES = [msg('containers'), msg('bulk materials'), msg('oil')];
+const CARGO_TYPE_NAMES = [msg('kontainer'), msg('material curah'), msg('minyak')];
 
-export default function Game({ onExit }: { onExit?: () => void }) {
+export default function Game({
+  onExit,
+  onPlayAgain,
+}: {
+  onExit?: () => void;
+  onPlayAgain?: () => void;
+}) {
   const gt = useGT();
   const m = useMessages();
   const { state, setTool, setActivePanel, addMoney, addNotification, setSpeed } = useGame();
@@ -228,7 +235,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
 
     // Show a notification every 5 deliveries to avoid spam
     if (bargeDeliveryCountRef.current % 5 === 1) {
-      const cargoName = CARGO_TYPE_NAMES[cargoType] || msg('cargo');
+      const cargoName = CARGO_TYPE_NAMES[cargoType] || msg('kargo');
       addNotification(
         gt('Cargo Delivered'),
         gt('A shipment of {cargoName} has arrived at the marina. +${cargoValue} trade revenue.', { cargoName: m(cargoName), cargoValue }),
@@ -280,7 +287,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
                         <button
                           onClick={handleCopyRoomLink}
                           className="p-0.5 hover:bg-white/10 rounded transition-colors"
-                          title="Copy invite link"
+                          title="Salin tautan undangan"
                         >
                           {copiedRoomLink ? (
                             <Check className="w-3 h-3 text-green-400" />
@@ -366,7 +373,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
                         <button
                           onClick={handleCopyRoomLink}
                           className="p-1 hover:bg-white/10 rounded transition-colors"
-                          title="Copy invite link"
+                          title="Salin tautan undangan"
                         >
                           {copiedRoomLink ? (
                             <Check className="w-3.5 h-3.5 text-green-400" />
@@ -407,6 +414,11 @@ export default function Game({ onExit }: { onExit?: () => void }) {
           isVisible={isTipVisible}
           onContinue={onTipContinue}
           onSkipAll={onTipSkipAll}
+        />
+
+        <FloodResultDialog
+          onPlayAgain={() => onPlayAgain?.()}
+          onMainMenu={() => onExit?.()}
         />
       </div>
     </TooltipProvider>

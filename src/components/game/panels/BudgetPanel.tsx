@@ -6,38 +6,40 @@ import { useGame } from '@/context/GameContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import { Budget } from '@/types/game';
 
-// Translatable UI labels
 const UI_LABELS = {
-  budget: msg('Budget'),
-  income: msg('Income'),
-  expenses: msg('Expenses'),
-  net: msg('Net'),
+  budget: msg('Anggaran'),
+  income: msg('Pemasukan'),
+  expenses: msg('Pengeluaran'),
+  net: msg('Bersih'),
 };
+
+const BUDGET_KEYS: (keyof Budget)[] = [
+  'emergency_response',
+  'flood_rescue',
+  'medical_response',
+  'preparedness_training',
+  'evacuation_transport',
+  'green_spaces',
+  'pump_stations',
+  'drain_network',
+];
 
 export function BudgetPanel() {
   const { state, setActivePanel, setBudgetFunding } = useGame();
   const { budget, stats } = state;
   const m = useMessages();
-  
-  const categories = [
-    { key: 'police', ...budget.police },
-    { key: 'fire', ...budget.fire },
-    { key: 'health', ...budget.health },
-    { key: 'education', ...budget.education },
-    { key: 'transportation', ...budget.transportation },
-    { key: 'parks', ...budget.parks },
-    { key: 'power', ...budget.power },
-    { key: 'water', ...budget.water },
-  ];
-  
+
+  const categories = BUDGET_KEYS.map((key) => ({ key, ...budget[key] }));
+
   return (
     <Dialog open={true} onOpenChange={() => setActivePanel('none')}>
       <DialogContent className="max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{m(UI_LABELS.budget)}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           <div className="grid grid-cols-3 gap-4 pb-4 border-b border-border">
             <div>
@@ -55,14 +57,14 @@ export function BudgetPanel() {
               </div>
             </div>
           </div>
-          
+
           <div className="space-y-4">
-            {categories.map(cat => (
+            {categories.map((cat) => (
               <div key={cat.key} className="flex items-center gap-4">
-                <Label className="w-28 text-sm">{cat.name}</Label>
+                <Label className="w-36 text-sm shrink-0">{cat.name}</Label>
                 <Slider
                   value={[cat.funding]}
-                  onValueChange={(value) => setBudgetFunding(cat.key as keyof typeof budget, value[0])}
+                  onValueChange={(value) => setBudgetFunding(cat.key, value[0])}
                   min={0}
                   max={100}
                   step={5}

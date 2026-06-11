@@ -23,6 +23,7 @@ import {
   TOOL_INFO,
 } from '@/types/game';
 import { generateCityName, generateWaterName } from './names';
+import { runFloodSimulationStep } from './floodSimulation';
 import { isMobile } from 'react-device-detect';
 
 // Default grid size for new games
@@ -760,6 +761,10 @@ function createTile(x: number, y: number, buildingType: BuildingType = 'grass'):
     crime: 0,
     traffic: 0,
     hasSubway: false,
+    elevation: -1, // -1 = tanpa data elevasi (peta procedural lama); meter pada peta wilayah
+    waterLevel: 0, // meter, satuan sama dengan elevation
+    flowDirection: 0,
+    playable: true,
   };
 }
 
@@ -1090,14 +1095,14 @@ export function createBridgesOnPath(
 
 function createInitialBudget(): Budget {
   return {
-    police: { name: 'Police', funding: 100, cost: 0 },
-    fire: { name: 'Fire', funding: 100, cost: 0 },
-    health: { name: 'Health', funding: 100, cost: 0 },
-    education: { name: 'Education', funding: 100, cost: 0 },
-    transportation: { name: 'Transportation', funding: 100, cost: 0 },
-    parks: { name: 'Parks', funding: 100, cost: 0 },
-    power: { name: 'Power', funding: 100, cost: 0 },
-    water: { name: 'Water', funding: 100, cost: 0 },
+    emergency_response: { name: 'Tanggap Darurat', funding: 100, cost: 0 },
+    flood_rescue: { name: 'Penyelamatan Banjir', funding: 100, cost: 0 },
+    medical_response: { name: 'Medis Darurat', funding: 100, cost: 0 },
+    preparedness_training: { name: 'Kesiapsiagaan', funding: 100, cost: 0 },
+    evacuation_transport: { name: 'Transport Evakuasi', funding: 100, cost: 0 },
+    green_spaces: { name: 'Ruang Hijau', funding: 100, cost: 0 },
+    pump_stations: { name: 'Stasiun Pompa', funding: 100, cost: 0 },
+    drain_network: { name: 'Jaringan Drainase', funding: 100, cost: 0 },
   };
 }
 
@@ -1142,12 +1147,12 @@ function createServiceCoverage(size: number): ServiceCoverage {
   };
 
   return {
-    police: createGrid(),
-    fire: createGrid(),
-    health: createGrid(),
-    education: createGrid(),
-    power: createBoolGrid(),
-    water: createBoolGrid(),
+    evacuation: createGrid(),
+    rescue: createGrid(),
+    medical: createGrid(),
+    preparedness: createGrid(),
+    pumpCoverage: createBoolGrid(),
+    drainCoverage: createBoolGrid(),
   };
 }
 
@@ -1165,8 +1170,45 @@ function generateUUID(): string {
   });
 }
 
-export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityName: string = 'New City'): GameState {
-  const { grid, waterBodies } = generateTerrain(size);
+/**
+ * Bangun Tile[][] dari data peta wilayah hasil preprocessing (FloodGuard).
+ * - isWater → building.type 'water'; padding/void → 'empty' + playable=false
+ * - elevation dalam METER (satuan sama dengan waterLevel — KD-2)
+ */
+function buildGridFromMapData(mapData: import('@/types/game').FloodMapData): Tile[][] {
+  const n = mapData.gridSize;
+  const grid: Tile[][] = [];
+  for (let y = 0; y < n; y++) {
+    const row: Tile[] = [];
+    for (let x = 0; x < n; x++) {
+      const idx = y * n + x;
+      const isPlayable = mapData.playable[idx] === 1;
+      const isWater = mapData.water[idx] === 1;
+      const tile = createTile(x, y, isWater ? 'water' : isPlayable ? 'grass' : 'empty');
+      tile.elevation = mapData.elevation[idx];
+      tile.waterLevel = 0;
+      tile.flowDirection = 0;
+      tile.playable = isPlayable;
+      row.push(tile);
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+export function createInitialGameState(
+  size: number = DEFAULT_GRID_SIZE,
+  cityName: string = 'New City',
+  mapData?: import('@/types/game').FloodMapData
+): GameState {
+  // Peta wilayah Surabaya (FloodGuard): grid dari data elevasi nyata.
+  // Tanpa mapData: perilaku lama IsoCity (terrain procedural) tetap utuh.
+  const { grid, waterBodies } = mapData
+    ? { grid: buildGridFromMapData(mapData), waterBodies: [] as WaterBody[] }
+    : generateTerrain(size);
+  if (mapData) {
+    size = mapData.gridSize;
+  }
   const adjacentCities = generateAdjacentCities();
   
   // Create a default city covering the entire map
@@ -1231,19 +1273,21 @@ const withRange = <R extends number, T extends Record<string, unknown>>(
 });
 
 export const SERVICE_CONFIG = {
-  police_station: withRange(13, { type: 'police' as const }),
-  fire_station: withRange(18, { type: 'fire' as const }),
-  hospital: withRange(24, { type: 'health' as const }),
-  school: withRange(11, { type: 'education' as const }),
-  university: withRange(19, { type: 'education' as const }),
-  power_plant: withRange(15, {}),
-  water_tower: withRange(12, {}),
+  police_station: withRange(13, { type: 'evacuation' as const }),
+  evacuation_post: withRange(14, { type: 'evacuation' as const }),
+  fire_station: withRange(18, { type: 'rescue' as const }),
+  hospital: withRange(24, { type: 'medical' as const }),
+  school: withRange(11, { type: 'preparedness' as const }),
+  university: withRange(19, { type: 'preparedness' as const }),
+  power_plant: withRange(15, { type: 'pump' as const }),
+  flood_pump: withRange(16, { type: 'pump' as const }),
+  water_tower: withRange(12, { type: 'drain' as const }),
 } as const;
 
 // Building types that provide services
 export const SERVICE_BUILDING_TYPES = new Set([
-  'police_station', 'fire_station', 'hospital', 'school', 'university',
-  'power_plant', 'water_tower'
+  'police_station', 'evacuation_post', 'fire_station', 'hospital', 'school', 'university',
+  'power_plant', 'flood_pump', 'water_tower',
 ]);
 
 // Service building upgrade constants
@@ -1299,31 +1343,30 @@ function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage
     const minX = Math.max(0, x - range);
     const maxX = Math.min(size - 1, x + range);
     
-    // Handle power and water (boolean coverage)
-    if (type === 'power_plant') {
-      for (let ny = minY; ny <= maxY; ny++) {
-        for (let nx = minX; nx <= maxX; nx++) {
-          const dx = nx - x;
-          const dy = ny - y;
-          // Use squared distance comparison (avoid Math.sqrt)
-          if (dx * dx + dy * dy <= rangeSquared) {
-            services.power[ny][nx] = true;
-          }
-        }
-      }
-    } else if (type === 'water_tower') {
+    const cfg = config as { type?: 'evacuation' | 'rescue' | 'medical' | 'preparedness' | 'pump' | 'drain' };
+
+    if (cfg.type === 'pump') {
       for (let ny = minY; ny <= maxY; ny++) {
         for (let nx = minX; nx <= maxX; nx++) {
           const dx = nx - x;
           const dy = ny - y;
           if (dx * dx + dy * dy <= rangeSquared) {
-            services.water[ny][nx] = true;
+            services.pumpCoverage[ny][nx] = true;
           }
         }
       }
-    } else {
-      // Handle percentage-based coverage (police, fire, health, education)
-      const serviceType = (config as { type: 'police' | 'fire' | 'health' | 'education' }).type;
+    } else if (cfg.type === 'drain') {
+      for (let ny = minY; ny <= maxY; ny++) {
+        for (let nx = minX; nx <= maxX; nx++) {
+          const dx = nx - x;
+          const dy = ny - y;
+          if (dx * dx + dy * dy <= rangeSquared) {
+            services.drainCoverage[ny][nx] = true;
+          }
+        }
+      }
+    } else if (cfg.type) {
+      const serviceType = cfg.type;
       const currentCoverage = services[serviceType] as number[][];
       
       for (let ny = minY; ny <= maxY; ny++) {
@@ -1527,15 +1570,15 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
 
   // Placeholder tiles from multi-tile footprints stay inert but track utilities
   if (building.type === 'empty') {
-    building.powered = services.power[y][x];
-    building.watered = services.water[y][x];
+    building.powered = services.pumpCoverage[y][x];
+    building.watered = services.drainCoverage[y][x];
     building.population = 0;
     building.jobs = 0;
     return building;
   }
 
-  building.powered = services.power[y][x];
-  building.watered = services.water[y][x];
+  building.powered = services.pumpCoverage[y][x];
+  building.watered = services.drainCoverage[y][x];
 
   const hasPower = building.powered;
   const hasWater = building.watered;
@@ -1594,8 +1637,8 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
               const clearTile = grid[y + dy]?.[x + dx];
               if (clearTile) {
                 const clearedBuilding = createBuilding('grass');
-                clearedBuilding.powered = services.power[y + dy]?.[x + dx] ?? false;
-                clearedBuilding.watered = services.water[y + dy]?.[x + dx] ?? false;
+                clearedBuilding.powered = services.pumpCoverage[y + dy]?.[x + dx] ?? false;
+                clearedBuilding.watered = services.drainCoverage[y + dy]?.[x + dx] ?? false;
                 clearTile.building = clearedBuilding;
               }
             }
@@ -1648,10 +1691,10 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
 
   // Calculate level based on land value, services, and demand
   const serviceCoverage = (
-    services.police[y][x] +
-    services.fire[y][x] +
-    services.health[y][x] +
-    services.education[y][x]
+    services.evacuation[y][x] +
+    services.rescue[y][x] +
+    services.medical[y][x] +
+    services.preparedness[y][x]
   ) / 4;
 
   // Get zone demand to factor into level calculation
@@ -1735,8 +1778,8 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
   // Always refresh stats on the anchor tile
   const anchorTile = grid[anchorY][anchorX];
   const anchorBuilding = anchorTile.building;
-  anchorBuilding.powered = services.power[anchorY][anchorX];
-  anchorBuilding.watered = services.water[anchorY][anchorX];
+  anchorBuilding.powered = services.pumpCoverage[anchorY][anchorX];
+  anchorBuilding.watered = services.drainCoverage[anchorY][anchorX];
   anchorBuilding.level = Math.max(anchorBuilding.level, Math.min(targetLevel, anchorBuilding.level + 1));
 
   const buildingStats = BUILDING_STATS[anchorBuilding.type];
@@ -1754,6 +1797,9 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
 
 // Calculate city stats
 // effectiveTaxRate is the lagged tax rate used for demand calculations
+//
+// UT-1 (Fase 4-5): floodedRatio memakai state.playableTileCount sebagai penyebut,
+// BUKAN gridSize² — lihat GameState.playableTileCount & computeMapStats() di mapLoader.ts
 function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: number, effectiveTaxRate: number, services: ServiceCoverage): Stats {
   let population = 0;
   let jobs = 0;
@@ -1897,20 +1943,20 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
   const income = Math.floor(population * taxRate * 0.1 + jobs * taxRate * 0.05);
   
   let expenses = 0;
-  expenses += Math.floor(budget.police.cost * budget.police.funding / 100);
-  expenses += Math.floor(budget.fire.cost * budget.fire.funding / 100);
-  expenses += Math.floor(budget.health.cost * budget.health.funding / 100);
-  expenses += Math.floor(budget.education.cost * budget.education.funding / 100);
-  expenses += Math.floor(budget.transportation.cost * budget.transportation.funding / 100);
-  expenses += Math.floor(budget.parks.cost * budget.parks.funding / 100);
-  expenses += Math.floor(budget.power.cost * budget.power.funding / 100);
-  expenses += Math.floor(budget.water.cost * budget.water.funding / 100);
+  expenses += Math.floor(budget.emergency_response.cost * budget.emergency_response.funding / 100);
+  expenses += Math.floor(budget.flood_rescue.cost * budget.flood_rescue.funding / 100);
+  expenses += Math.floor(budget.medical_response.cost * budget.medical_response.funding / 100);
+  expenses += Math.floor(budget.preparedness_training.cost * budget.preparedness_training.funding / 100);
+  expenses += Math.floor(budget.evacuation_transport.cost * budget.evacuation_transport.funding / 100);
+  expenses += Math.floor(budget.green_spaces.cost * budget.green_spaces.funding / 100);
+  expenses += Math.floor(budget.pump_stations.cost * budget.pump_stations.funding / 100);
+  expenses += Math.floor(budget.drain_network.cost * budget.drain_network.funding / 100);
 
   // Calculate ratings
-  const avgPoliceCoverage = calculateAverageCoverage(services.police);
-  const avgFireCoverage = calculateAverageCoverage(services.fire);
-  const avgHealthCoverage = calculateAverageCoverage(services.health);
-  const avgEducationCoverage = calculateAverageCoverage(services.education);
+  const avgPoliceCoverage = calculateAverageCoverage(services.evacuation);
+  const avgFireCoverage = calculateAverageCoverage(services.rescue);
+  const avgHealthCoverage = calculateAverageCoverage(services.medical);
+  const avgEducationCoverage = calculateAverageCoverage(services.preparedness);
 
   const safety = Math.min(100, avgPoliceCoverage * 0.7 + avgFireCoverage * 0.3);
   const health = Math.min(100, avgHealthCoverage * 0.8 + (100 - totalPollution / (size * size)) * 0.2);
@@ -1994,21 +2040,25 @@ function updateBudgetCosts(grid: Tile[][], budget: Budget): Budget {
         case 'park_large': parkCount++; break;
         case 'tennis': parkCount++; break;
         case 'power_plant': powerCount++; break;
+        case 'flood_pump': powerCount++; break;
         case 'water_tower': waterCount++; break;
+        case 'evacuation_post': policeCount++; break;
+        case 'retention_pond': parkCount++; break;
+        case 'drain_channel': roadCount++; break;
         case 'road': roadCount++; break;
         case 'subway_station': subwayStationCount++; break;
       }
     }
   }
 
-  newBudget.police.cost = policeCount * 50;
-  newBudget.fire.cost = fireCount * 50;
-  newBudget.health.cost = hospitalCount * 100;
-  newBudget.education.cost = schoolCount * 30 + universityCount * 100;
-  newBudget.transportation.cost = roadCount * 2 + subwayTileCount * 3 + subwayStationCount * 25;
-  newBudget.parks.cost = parkCount * 10;
-  newBudget.power.cost = powerCount * 150;
-  newBudget.water.cost = waterCount * 75;
+  newBudget.emergency_response.cost = policeCount * 50;
+  newBudget.flood_rescue.cost = fireCount * 50;
+  newBudget.medical_response.cost = hospitalCount * 100;
+  newBudget.preparedness_training.cost = schoolCount * 30 + universityCount * 100;
+  newBudget.evacuation_transport.cost = roadCount * 2 + subwayTileCount * 3 + subwayStationCount * 25;
+  newBudget.green_spaces.cost = parkCount * 10;
+  newBudget.pump_stations.cost = powerCount * 150;
+  newBudget.drain_network.cost = waterCount * 75;
 
   return newBudget;
 }
@@ -2046,9 +2096,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Power advisor
   if (unpoweredBuildings > 0) {
     messages.push({
-      name: 'Power Advisor',
+      name: 'Penasihat Listrik',
       icon: 'power',
-      messages: [`${unpoweredBuildings} buildings lack power. Build more power plants!`],
+      messages: [`${unpoweredBuildings} bangunan tanpa listrik. Bangun lebih banyak pembangkit!`],
       priority: unpoweredBuildings > 10 ? 'high' : 'medium',
     });
   }
@@ -2056,9 +2106,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Water advisor
   if (unwateredBuildings > 0) {
     messages.push({
-      name: 'Water Advisor',
+      name: 'Penasihat Air',
       icon: 'water',
-      messages: [`${unwateredBuildings} buildings lack water. Build water towers!`],
+      messages: [`${unwateredBuildings} bangunan tanpa air. Bangun lebih banyak menara air!`],
       priority: unwateredBuildings > 10 ? 'high' : 'medium',
     });
   }
@@ -2067,9 +2117,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   const netIncome = stats.income - stats.expenses;
   if (netIncome < 0) {
     messages.push({
-      name: 'Finance Advisor',
+      name: 'Penasihat Keuangan',
       icon: 'cash',
-      messages: [`City is running a deficit of $${Math.abs(netIncome)}/month. Consider raising taxes or cutting services.`],
+      messages: [`Wilayah mengalami defisit $${Math.abs(netIncome)}/bulan. Pertimbangkan menaikkan pajak atau mengurangi layanan.`],
       priority: netIncome < -500 ? 'critical' : 'high',
     });
   }
@@ -2077,9 +2127,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Safety advisor
   if (stats.safety < 40) {
     messages.push({
-      name: 'Safety Advisor',
+      name: 'Penasihat Keamanan',
       icon: 'shield',
-      messages: ['Crime is on the rise. Build more police stations to protect citizens.'],
+      messages: ['Kriminalitas meningkat. Bangun lebih banyak kantor polisi untuk melindungi warga.'],
       priority: stats.safety < 20 ? 'critical' : 'high',
     });
   }
@@ -2087,9 +2137,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Health advisor
   if (stats.health < 50) {
     messages.push({
-      name: 'Health Advisor',
+      name: 'Penasihat Kesehatan',
       icon: 'hospital',
-      messages: ['Health services are lacking. Build hospitals to improve citizen health.'],
+      messages: ['Layanan kesehatan kurang. Bangun rumah sakit untuk meningkatkan kesehatan warga.'],
       priority: stats.health < 30 ? 'high' : 'medium',
     });
   }
@@ -2097,9 +2147,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Education advisor
   if (stats.education < 50) {
     messages.push({
-      name: 'Education Advisor',
+      name: 'Penasihat Pendidikan',
       icon: 'education',
-      messages: ['Education levels are low. Build schools and universities.'],
+      messages: ['Tingkat pendidikan rendah. Bangun sekolah dan universitas.'],
       priority: stats.education < 30 ? 'high' : 'medium',
     });
   }
@@ -2107,9 +2157,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Environment advisor
   if (stats.environment < 40) {
     messages.push({
-      name: 'Environment Advisor',
+      name: 'Penasihat Lingkungan',
       icon: 'environment',
-      messages: ['Pollution is high. Plant trees and build parks to improve air quality.'],
+      messages: ['Polusi tinggi. Tanam pohon dan bangun taman untuk meningkatkan kualitas udara.'],
       priority: stats.environment < 20 ? 'high' : 'medium',
     });
   }
@@ -2118,9 +2168,9 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   const jobRatio = stats.jobs / (stats.population || 1);
   if (stats.population > 100 && jobRatio < 0.8) {
     messages.push({
-      name: 'Employment Advisor',
+      name: 'Penasihat Ketenagakerjaan',
       icon: 'jobs',
-      messages: [`Unemployment is high. Zone more commercial and industrial areas.`],
+      messages: ['Pengangguran tinggi. Zonasi lebih banyak area komersial dan industri.'],
       priority: jobRatio < 0.5 ? 'high' : 'medium',
     });
   }
@@ -2128,17 +2178,17 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   // Abandonment advisor (data already collected above)
   if (abandonedBuildings > 0) {
     const details: string[] = [];
-    if (abandonedResidential > 0) details.push(`${abandonedResidential} residential`);
-    if (abandonedCommercial > 0) details.push(`${abandonedCommercial} commercial`);
-    if (abandonedIndustrial > 0) details.push(`${abandonedIndustrial} industrial`);
+    if (abandonedResidential > 0) details.push(`${abandonedResidential} permukiman`);
+    if (abandonedCommercial > 0) details.push(`${abandonedCommercial} komersial`);
+    if (abandonedIndustrial > 0) details.push(`${abandonedIndustrial} industri`);
     
     messages.push({
-      name: 'Urban Planning Advisor',
+      name: 'Penasihat Perencanaan Kota',
       icon: 'planning',
       messages: [
-        `${abandonedBuildings} abandoned building${abandonedBuildings > 1 ? 's' : ''} in your city (${details.join(', ')}).`,
-        'Oversupply has caused buildings to become vacant.',
-        'Increase demand by growing your city or wait for natural redevelopment.'
+        `${abandonedBuildings} bangunan ditinggalkan di wilayah Anda (${details.join(', ')}).`,
+        'Kelebihan pasokan menyebabkan bangunan menjadi kosong.',
+        'Tingkatkan permintaan dengan mengembangkan wilayah atau tunggu revitalisasi alami.'
       ],
       priority: abandonedBuildings > 10 ? 'high' : abandonedBuildings > 5 ? 'medium' : 'low',
     });
@@ -2188,8 +2238,8 @@ export function simulateTick(state: GameState): GameState {
       }
       
       // Check what updates this tile needs
-      const newPowered = services.power[y][x];
-      const newWatered = services.water[y][x];
+      const newPowered = services.pumpCoverage[y][x];
+      const newWatered = services.drainCoverage[y][x];
       const needsPowerWaterUpdate = originalBuilding.powered !== newPowered ||
                                     originalBuilding.watered !== newWatered;
       
@@ -2233,7 +2283,9 @@ export function simulateTick(state: GameState): GameState {
           tile.building.constructionProgress < 100 &&
           !NO_CONSTRUCTION_TYPES.includes(tile.building.type)) {
         const isUtilityBuilding = tile.building.type === 'power_plant' || tile.building.type === 'water_tower';
-        const canConstruct = isUtilityBuilding || (tile.building.powered && tile.building.watered);
+        // Peta wilayah FloodGuard tak punya ekonomi listrik/air (pakai mekanik pompa/drainase),
+        // jadi infrastruktur banjir & taman tak boleh terkunci syarat powered/watered (KD: anti-deadlock konstruksi).
+        const canConstruct = isUtilityBuilding || !!state.selectedRegion || (tile.building.powered && tile.building.watered);
         
         if (canConstruct) {
           const constructionSpeed = getConstructionSpeed(tile.building.type);
@@ -2293,9 +2345,8 @@ export function simulateTick(state: GameState): GameState {
             applyBuildingFootprint(newGrid, x, y, candidate, tile.zone, 1, services);
           }
         }
-      } else if (tile.zone !== 'none' && tile.building.type !== 'grass') {
-        // Evolve existing building - this may modify multiple tiles for multi-tile buildings
-        // The evolveBuilding function handles its own row modifications internally
+      } else if (tile.zone !== 'none' && tile.building.type !== 'grass' && !state.selectedRegion) {
+        // FloodGuard: jangan evolusi bangunan otomatis di peta wilayah (§11 plan)
         newGrid[y][x].building = evolveBuilding(newGrid, x, y, services, state.stats.demand);
       }
 
@@ -2305,7 +2356,7 @@ export function simulateTick(state: GameState): GameState {
 
       // Fire simulation
       if (state.disastersEnabled && tile.building.onFire) {
-        const fireCoverage = services.fire[y][x];
+        const fireCoverage = services.rescue[y][x];
         const fightingChance = fireCoverage / 300;
         
         if (Math.random() < fightingChance) {
@@ -2345,7 +2396,7 @@ export function simulateTick(state: GameState): GameState {
         if (adjacentFireCount > 0) {
           // Base spread chance per adjacent fire: 0.5% per tick (reduced from 1.5%)
           // Fire coverage significantly reduces spread chance
-          const fireCoverage = services.fire[y][x];
+          const fireCoverage = services.rescue[y][x];
           const coverageReduction = fireCoverage / 100; // 0-1 based on coverage (100% coverage = 1)
           const baseSpreadChance = 0.005 * adjacentFireCount;
           const spreadChance = baseSpreadChance * (1 - coverageReduction * 0.95); // Fire coverage can reduce spread by up to 95%
@@ -2490,14 +2541,49 @@ export function simulateTick(state: GameState): GameState {
     }
   }
 
+  let finalGrid = newGrid;
+  let weatherState = state.weatherState;
+  let floodStats = state.floodStats;
+  let gameStatus = state.gameStatus ?? 'playing';
+  let finalSpeed = state.speed;
+
+  if (state.selectedRegion && gameStatus === 'playing') {
+    finalGrid = newGrid.map((row) =>
+      row.map((t) => ({ ...t, building: { ...t.building } }))
+    );
+    const floodServices = calculateServiceCoverage(finalGrid, size);
+    const dayJustAdvanced = state.tick === 29;
+    const prevDayRain = state.weatherState?.rainfallRate ?? 0;
+    const floodResult = runFloodSimulationStep(
+      {
+        ...state,
+        grid: finalGrid,
+        services: floodServices,
+        year: newYear,
+        month: newMonth,
+        day: newDay,
+        tick: newTick,
+      },
+      dayJustAdvanced,
+      prevDayRain
+    );
+    weatherState = floodResult.weatherState;
+    floodStats = floodResult.floodStats;
+    gameStatus = floodResult.gameStatus;
+    if (gameStatus !== 'playing') {
+      finalSpeed = 0;
+    }
+  }
+
   return {
     ...state,
-    grid: newGrid,
+    grid: finalGrid,
     year: newYear,
     month: newMonth,
     day: newDay,
     hour: newHour,
     tick: newTick,
+    speed: finalSpeed,
     effectiveTaxRate: newEffectiveTaxRate,
     stats: newStats,
     budget: newBudget,
@@ -2505,12 +2591,17 @@ export function simulateTick(state: GameState): GameState {
     advisorMessages,
     notifications: newNotifications,
     history,
+    weatherState,
+    floodStats,
+    gameStatus,
   };
 }
 
 // Building sizes for multi-tile buildings (width x height)
 const BUILDING_SIZES: Partial<Record<BuildingType, { width: number; height: number }>> = {
   power_plant: { width: 2, height: 2 },
+  flood_pump: { width: 2, height: 2 },
+  retention_pond: { width: 3, height: 3 },
   hospital: { width: 2, height: 2 },
   school: { width: 2, height: 2 },
   stadium: { width: 3, height: 3 },
@@ -2752,8 +2843,8 @@ function applyBuildingFootprint(
         cell.building.level = level;
         cell.building.age = 0;
         if (services) {
-          cell.building.powered = services.power[originY + dy][originX + dx];
-          cell.building.watered = services.water[originY + dy][originX + dx];
+          cell.building.powered = services.pumpCoverage[originY + dy][originX + dx];
+          cell.building.watered = services.drainCoverage[originY + dy][originX + dx];
         }
       } else {
         cell.building = createBuilding('empty');
@@ -2781,12 +2872,22 @@ export function placeBuilding(
   // Can't build on water
   if (tile.building.type === 'water') return state;
 
+  // Tile padding/void di luar area data wilayah (peta FloodGuard) — non-playable (KD-1)
+  if (tile.playable === false) return state;
+
   // Can't place roads on existing buildings (only allow on grass, tree, existing roads, or rail - rail+road creates combined tile)
   // Note: 'empty' tiles are part of multi-tile building footprints, so roads can't be placed there either
-  if (buildingType === 'road') {
-    const allowedTypes: BuildingType[] = ['grass', 'tree', 'road', 'rail'];
+  if (buildingType === 'road' || buildingType === 'drain_channel') {
+    const allowedTypes: BuildingType[] = ['grass', 'tree', 'road', 'rail', 'drain_channel'];
     if (!allowedTypes.includes(tile.building.type)) {
-      return state; // Can't place road on existing building
+      return state;
+    }
+  }
+
+  if (buildingType === 'levee') {
+    const allowedTypes: BuildingType[] = ['grass', 'tree', 'road', 'levee'];
+    if (!allowedTypes.includes(tile.building.type)) {
+      return state;
     }
   }
 
@@ -2799,10 +2900,22 @@ export function placeBuilding(
   }
 
   // Roads, bridges, and rail can be combined, but other buildings require clearing first
-  if (buildingType && buildingType !== 'road' && buildingType !== 'rail' && (tile.building.type === 'road' || tile.building.type === 'bridge')) {
+  if (
+    buildingType &&
+    buildingType !== 'road' &&
+    buildingType !== 'drain_channel' &&
+    buildingType !== 'rail' &&
+    (tile.building.type === 'road' || tile.building.type === 'bridge' || tile.building.type === 'drain_channel')
+  ) {
     return state;
   }
-  if (buildingType && buildingType !== 'road' && buildingType !== 'rail' && tile.building.type === 'rail') {
+  if (
+    buildingType &&
+    buildingType !== 'road' &&
+    buildingType !== 'drain_channel' &&
+    buildingType !== 'rail' &&
+    tile.building.type === 'rail'
+  ) {
     return state;
   }
 
@@ -3518,8 +3631,8 @@ export function generateRandomAdvancedCity(size: number = DEFAULT_GRID_SIZE, cit
   // Set power and water for all buildings
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      grid[y][x].building.powered = services.power[y][x];
-      grid[y][x].building.watered = services.water[y][x];
+      grid[y][x].building.powered = services.pumpCoverage[y][x];
+      grid[y][x].building.watered = services.drainCoverage[y][x];
     }
   }
   
@@ -3625,7 +3738,7 @@ export function getDevelopmentBlockers(
   const wouldBeStarter = isStarterBuilding(x, y, candidate);
   
   // Check power (not required for starter buildings)
-  const hasPower = state.services.power[y][x];
+  const hasPower = state.services.pumpCoverage[y][x];
   if (!hasPower && !wouldBeStarter) {
     blockers.push({
       reason: 'No power',
@@ -3634,7 +3747,7 @@ export function getDevelopmentBlockers(
   }
   
   // Check water (not required for starter buildings)
-  const hasWater = state.services.water[y][x];
+  const hasWater = state.services.drainCoverage[y][x];
   if (!hasWater && !wouldBeStarter) {
     blockers.push({
       reason: 'No water',

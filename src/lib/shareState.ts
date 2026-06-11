@@ -97,6 +97,10 @@ function expandTile(min: MinTile, x: number, y: number): Tile {
     traffic: 0,
     hasSubway: min[8] === 1,
     hasRailOverlay: min[12] === 1,
+    elevation: -1, // share-link tidak membawa data elevasi
+    waterLevel: 0,
+    flowDirection: 0,
+    playable: true,
   };
 }
 

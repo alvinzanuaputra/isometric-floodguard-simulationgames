@@ -7,7 +7,19 @@
 // Background color to filter from sprite sheets
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
 // Color distance threshold - pixels within this distance will be made transparent
-const COLOR_THRESHOLD = 155; // Adjust this value to be more/less aggressive
+const COLOR_THRESHOLD = 155;
+
+/** Deteksi piksel latar merah termasuk fringe WebP setelah kompresi lossy. */
+function isRedBackgroundPixel(r: number, g: number, b: number, threshold: number): boolean {
+  const distance = Math.sqrt(
+    (r - BACKGROUND_COLOR.r) ** 2 +
+    (g - BACKGROUND_COLOR.g) ** 2 +
+    (b - BACKGROUND_COLOR.b) ** 2
+  );
+  if (distance <= threshold) return true;
+  // Fringe merah/oranye tipikal sheet sekunder (dense, shops, services) di WebP
+  return r >= 190 && g <= 110 && b <= 110 && r > g + 40 && r > b + 40;
+}
 
 // Image cache for building sprites
 const imageCache = new Map<string, HTMLImageElement>();
@@ -163,15 +175,8 @@ export function filterBackgroundColor(img: HTMLImageElement, threshold: number =
         const b = data[i + 2];
         
         // Calculate color distance using Euclidean distance in RGB space
-        const distance = Math.sqrt(
-          Math.pow(r - BACKGROUND_COLOR.r, 2) +
-          Math.pow(g - BACKGROUND_COLOR.g, 2) +
-          Math.pow(b - BACKGROUND_COLOR.b, 2)
-        );
-        
-        // If the color is close to the background color, make it transparent
-        if (distance <= threshold) {
-          data[i + 3] = 0; // Set alpha to 0 (transparent)
+        if (isRedBackgroundPixel(r, g, b, threshold)) {
+          data[i + 3] = 0;
           filteredCount++;
         }
       }
@@ -207,9 +212,10 @@ export function filterBackgroundColor(img: HTMLImageElement, threshold: number =
  * @param applyFilter Whether to apply background color filtering (default: true for sprite sheets)
  * @returns Promise resolving to the loaded (and optionally filtered) image
  */
+const FILTERED_CACHE_SUFFIX = '_filtered_v2';
+
 export function loadSpriteImage(src: string, applyFilter: boolean = true): Promise<HTMLImageElement> {
-  // Check if this is already cached (as filtered version)
-  const cacheKey = applyFilter ? `${src}_filtered` : src;
+  const cacheKey = applyFilter ? `${src}${FILTERED_CACHE_SUFFIX}` : src;
   if (imageCache.has(cacheKey)) {
     return Promise.resolve(imageCache.get(cacheKey)!);
   }
@@ -218,6 +224,11 @@ export function loadSpriteImage(src: string, applyFilter: boolean = true): Promi
     if (applyFilter) {
       return filterBackgroundColor(img).then((filteredImg: HTMLImageElement) => {
         imageCache.set(cacheKey, filteredImg);
+        // Buang salinan mentah agar tidak pernah ter-draw tanpa filter
+        imageCache.delete(src);
+        const webpPath = getWebPPath(src);
+        if (webpPath) imageCache.delete(webpPath);
+        notifyImageLoaded();
         return filteredImg;
       });
     }
@@ -231,7 +242,7 @@ export function loadSpriteImage(src: string, applyFilter: boolean = true): Promi
  * @param filtered Whether to check for the filtered version
  */
 export function isImageCached(src: string, filtered: boolean = false): boolean {
-  const cacheKey = filtered ? `${src}_filtered` : src;
+  const cacheKey = filtered ? `${src}${FILTERED_CACHE_SUFFIX}` : src;
   return imageCache.has(cacheKey);
 }
 
@@ -241,7 +252,7 @@ export function isImageCached(src: string, filtered: boolean = false): boolean {
  * @param filtered Whether to get the filtered version
  */
 export function getCachedImage(src: string, filtered: boolean = false): HTMLImageElement | undefined {
-  const cacheKey = filtered ? `${src}_filtered` : src;
+  const cacheKey = filtered ? `${src}${FILTERED_CACHE_SUFFIX}` : src;
   return imageCache.get(cacheKey);
 }
 
@@ -250,4 +261,32 @@ export function getCachedImage(src: string, filtered: boolean = false): HTMLImag
  */
 export function clearImageCache(): void {
   imageCache.clear();
+}
+
+/**
+ * Preload semua sprite sheet pack secara paralel dengan filter latar merah.
+ * Sheet sekunder (dense, shops, services, parks) dipakai bangunan hasil seeding.
+ */
+export function preloadSpritePackSheets(
+  pack: import('@/lib/renderConfig').SpritePack
+): void {
+  const sheets = [
+    pack.src,
+    pack.constructionSrc,
+    pack.abandonedSrc,
+    pack.denseSrc,
+    pack.parksSrc,
+    pack.parksConstructionSrc,
+    pack.farmsSrc,
+    pack.shopsSrc,
+    pack.stationsSrc,
+    pack.modernSrc,
+    pack.servicesSrc,
+    pack.infrastructureSrc,
+    pack.mansionsSrc,
+  ].filter((s): s is string => !!s);
+
+  for (const sheet of sheets) {
+    loadSpriteImage(sheet, true).catch(console.error);
+  }
 }

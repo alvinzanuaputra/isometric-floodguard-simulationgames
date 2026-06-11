@@ -22,11 +22,11 @@ import {
 
 // Translatable UI labels
 const UI_LABELS = {
-  cityAdvisors: msg('City Advisors'),
-  overallCityRating: msg('Overall City Rating'),
-  ratingDescription: msg('Based on happiness, health, education, safety & environment'),
-  noUrgentIssues: msg('No urgent issues to report!'),
-  cityRunningSmoothly: msg('Your city is running smoothly.'),
+  cityAdvisors: msg('Penasihat Kota'),
+  overallCityRating: msg('Peringkat Kota Keseluruhan'),
+  ratingDescription: msg('Berdasarkan kebahagiaan, kesehatan, pendidikan, keamanan & lingkungan'),
+  noUrgentIssues: msg('Tidak ada masalah mendesak!'),
+  cityRunningSmoothly: msg('Wilayah berjalan dengan baik.'),
 };
 
 const ADVISOR_ICON_MAP: Record<string, React.ReactNode> = {

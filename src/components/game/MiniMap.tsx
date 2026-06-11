@@ -6,6 +6,7 @@ import { useMessages } from 'gt-next';
 import { useGame } from '@/context/GameContext';
 import { Card } from '@/components/ui/card';
 import { TILE_WIDTH, TILE_HEIGHT } from '@/components/game/types';
+import { getMinimapTerrainColor } from '@/components/game/overlays';
 
 // Service buildings for minimap color mapping
 const SERVICE_BUILDINGS = new Set([
@@ -34,7 +35,7 @@ interface MiniMapProps {
 
 // Canvas-based Minimap - Memoized with throttled grid rendering
 // Translatable label
-const MINIMAP_LABEL = msg('Minimap');
+const MINIMAP_LABEL = msg('Minipeta');
 
 export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: MiniMapProps) {
   const { state } = useGame();
@@ -48,6 +49,12 @@ export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: Min
   // Pre-compute color map for faster lookups
   const serviceBuildings = useMemo(() => SERVICE_BUILDINGS, []);
   const parkBuildings = useMemo(() => PARK_BUILDINGS, []);
+
+  /** Peta FloodGuard punya tile.elevation >= 0; IsoCity lama sentinel -1. */
+  const hasElevationData = useMemo(
+    () => grid.some((row) => row.some((t) => t.elevation >= 0)),
+    [grid]
+  );
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -79,23 +86,30 @@ export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: Min
         for (let x = 0; x < gridSize; x++) {
           const tile = grid[y][x];
           const buildingType = tile.building.type;
-          let color = '#2d5a3d';
-          
-          // Prioritized color checks using Set for common cases
-          if (buildingType === 'water') color = '#0ea5e9';
-          else if (buildingType === 'road') color = '#6b7280';
-          else if (buildingType === 'tree') color = '#166534';
-          else if (tile.building.onFire) color = '#ef4444';
-          else if (tile.zone === 'residential' && buildingType !== 'grass') color = '#22c55e';
-          else if (tile.zone === 'residential') color = '#14532d';
-          else if (tile.zone === 'commercial' && buildingType !== 'grass') color = '#38bdf8';
-          else if (tile.zone === 'commercial') color = '#1d4ed8';
-          else if (tile.zone === 'industrial' && buildingType !== 'grass') color = '#f59e0b';
-          else if (tile.zone === 'industrial') color = '#b45309';
-          else if (serviceBuildings.has(buildingType)) color = '#c084fc';
-          else if (buildingType === 'power_plant') color = '#f97316';
-          else if (buildingType === 'water_tower') color = '#06b6d4';
-          else if (parkBuildings.has(buildingType)) color = '#84cc16';
+          let color: string;
+
+          if (hasElevationData) {
+            color = getMinimapTerrainColor(tile);
+            if (tile.building.onFire) color = '#ef4444';
+            else if (serviceBuildings.has(buildingType)) color = '#c084fc';
+            else if (parkBuildings.has(buildingType)) color = '#84cc16';
+          } else {
+            color = '#2d5a3d';
+            if (buildingType === 'water') color = '#0ea5e9';
+            else if (buildingType === 'road') color = '#6b7280';
+            else if (buildingType === 'tree') color = '#166534';
+            else if (tile.building.onFire) color = '#ef4444';
+            else if (tile.zone === 'residential' && buildingType !== 'grass') color = '#22c55e';
+            else if (tile.zone === 'residential') color = '#14532d';
+            else if (tile.zone === 'commercial' && buildingType !== 'grass') color = '#38bdf8';
+            else if (tile.zone === 'commercial') color = '#1d4ed8';
+            else if (tile.zone === 'industrial' && buildingType !== 'grass') color = '#f59e0b';
+            else if (tile.zone === 'industrial') color = '#b45309';
+            else if (serviceBuildings.has(buildingType)) color = '#c084fc';
+            else if (buildingType === 'power_plant') color = '#f97316';
+            else if (buildingType === 'water_tower') color = '#06b6d4';
+            else if (parkBuildings.has(buildingType)) color = '#84cc16';
+          }
           
           ctx.fillStyle = color;
           ctx.fillRect(x * scale, y * scale, Math.ceil(scale), Math.ceil(scale));
@@ -136,7 +150,7 @@ export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: Min
       ctx.closePath();
       ctx.stroke();
     }
-  }, [grid, gridSize, viewport, tick, serviceBuildings, parkBuildings]);
+  }, [grid, gridSize, viewport, tick, serviceBuildings, parkBuildings, hasElevationData]);
 
   const [isDragging, setIsDragging] = useState(false);
   
@@ -206,23 +220,46 @@ export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: Min
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       />
-      <div className="mt-2 grid grid-cols-4 gap-1 text-[8px]">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-green-500 rounded-sm" />
-          <span className="text-muted-foreground">R</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-blue-500 rounded-sm" />
-          <span className="text-muted-foreground">C</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-amber-500 rounded-sm" />
-          <span className="text-muted-foreground">I</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-pink-500 rounded-sm" />
-          <span className="text-muted-foreground">S</span>
-        </div>
+      <div className="mt-2 grid grid-cols-2 gap-1 text-[8px]">
+        {hasElevationData ? (
+          <>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-sky-500 rounded-sm" />
+              <span className="text-muted-foreground">Air</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-red-600 rounded-sm" />
+              <span className="text-muted-foreground">Rawan</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-lime-600 rounded-sm" />
+              <span className="text-muted-foreground">Aman</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-slate-800 rounded-sm" />
+              <span className="text-muted-foreground">Laut</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-sm" />
+              <span className="text-muted-foreground">R</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-sm" />
+              <span className="text-muted-foreground">C</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-amber-500 rounded-sm" />
+              <span className="text-muted-foreground">I</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-pink-500 rounded-sm" />
+              <span className="text-muted-foreground">S</span>
+            </div>
+          </>
+        )}
       </div>
     </Card>
   );

@@ -4,30 +4,36 @@ import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { msg, useMessages } from 'gt-next';
 import { useGame } from '@/context/GameContext';
 import { Tool, TOOL_INFO } from '@/types/game';
+import { FLOODGUARD_SIDEBAR } from '@/lib/floodTools';
+import { ToolIcons } from '@/components/ui/Icons';
 
 // Translatable category labels
 const CATEGORY_LABELS: Record<string, unknown> = {
-  TOOLS: msg('Tools'),
-  ZONES: msg('Zones'),
-  tools: msg('Tools'),
-  zones: msg('Zones'),
-  zoning: msg('Zoning'),
-  expandCity: msg('Expand City'),
-  services: msg('Services'),
-  parks: msg('Parks'),
-  sports: msg('Sports'),
-  waterfront: msg('Waterfront'),
-  community: msg('Community'),
-  utilities: msg('Utilities'),
-  special: msg('Special'),
+  ALAT: msg('Alat'),
+  INFRA: msg('Infrastruktur Banjir'),
+  INFRA_BANJIR: msg('Infrastruktur Banjir'),
+  HIJAU: msg('Ruang Hijau'),
+  RUANG_HIJAU: msg('Ruang Hijau'),
+  TOOLS: msg('Alat'),
+  ZONES: msg('Zona'),
+  tools: msg('Alat'),
+  zones: msg('Zona'),
+  zoning: msg('Zonasi'),
+  expandCity: msg('Perluas Kota'),
+  services: msg('Layanan'),
+  parks: msg('Taman'),
+  sports: msg('Olahraga'),
+  waterfront: msg('Pesisir'),
+  community: msg('Komunitas'),
+  utilities: msg('Utilitas'),
+  special: msg('Khusus'),
 };
 
-// UI labels for translation
 const UI_LABELS = {
-  budget: msg('Budget'),
-  statistics: msg('Statistics'),
-  advisors: msg('Advisors'),
-  settings: msg('Settings'),
+  budget: msg('Anggaran'),
+  statistics: msg('Statistik'),
+  advisors: msg('Penasihat'),
+  settings: msg('Pengaturan'),
 };
 import {
   BudgetIcon,
@@ -240,7 +246,7 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
                   className={`w-full justify-start gap-2 px-3 py-2 h-auto text-sm transition-all duration-150 ${
                     isSelected ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-muted/60'
                   }`}
-                  title={`${m(info.description)} - Cost: $${info.cost.toLocaleString()}`}
+                  title={`${m(info.description)} - Biaya: $${info.cost.toLocaleString()}`}
                 >
                   <span className="flex-1 text-left truncate">{m(info.name)}</span>
                   <span className={`text-xs ${isSelected ? 'opacity-80' : 'opacity-50'}`}>${info.cost.toLocaleString()}</span>
@@ -437,9 +443,9 @@ function ExitDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Exit to Main Menu</DialogTitle>
+          <DialogTitle>Keluar ke Menu Utama</DialogTitle>
           <DialogDescription>
-            Would you like to save your city before exiting?
+            Simpan peta sebelum keluar?
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -448,13 +454,13 @@ function ExitDialog({
             onClick={onExitWithoutSaving}
             className="w-full sm:w-auto"
           >
-            Exit Without Saving
+            Keluar Tanpa Menyimpan
           </Button>
           <Button
             onClick={onSaveAndExit}
             className="w-full sm:w-auto"
           >
-            Save & Exit
+            Simpan & Keluar
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -465,7 +471,8 @@ function ExitDialog({
 // Memoized Sidebar Component
 export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => void }) {
   const { state, setTool, setActivePanel, saveCity, expandCity, shrinkCity } = useGame();
-  const { selectedTool, stats, activePanel } = state;
+  const { selectedTool, stats, activePanel, selectedRegion } = state;
+  const isFloodGuard = !!selectedRegion;
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const multiplayer = useMultiplayerOptional();
@@ -493,11 +500,19 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
     onExit?.();
   }, [onExit]);
   
-  // Direct tool categories (shown inline)
-  const directCategories = useMemo(() => ({
-    'TOOLS': ['select', 'bulldoze', 'road', 'rail', 'subway'] as Tool[],
-    'ZONES': ['zone_residential', 'zone_commercial', 'zone_industrial'] as Tool[],
-  }), []);
+  const directCategories = useMemo((): Record<string, Tool[]> => {
+    if (isFloodGuard) {
+      return {
+        ALAT: FLOODGUARD_SIDEBAR.tools,
+        INFRA_BANJIR: FLOODGUARD_SIDEBAR.infra,
+        RUANG_HIJAU: FLOODGUARD_SIDEBAR.green,
+      };
+    }
+    return {
+      TOOLS: ['select', 'bulldoze', 'road', 'rail', 'subway'],
+      ZONES: ['zone_residential', 'zone_commercial', 'zone_industrial'],
+    };
+  }, [isFloodGuard]);
   
   // Zoning submenu (shown under ZONES section, before BUILDINGS)
   const zoningSubmenu = useMemo(() => ({
@@ -523,7 +538,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
   ], [expandCity, shrinkCity]);
   
   // Submenu categories (hover to expand) - includes all new assets from main
-  const submenuCategories = useMemo(() => [
+  const submenuCategories = useMemo(() => (isFloodGuard ? [] : [
     { 
       key: 'services', 
       label: CATEGORY_LABELS.services, 
@@ -561,19 +576,21 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
       tools: ['stadium', 'museum', 'airport', 'space_program', 'city_hall', 'amusement_park'] as Tool[],
       forceOpenUpward: true
     },
-  ], []);
+  ]), [isFloodGuard]);
   
   return (
     <div className="w-56 bg-sidebar border-r border-sidebar-border flex flex-col h-screen fixed left-0 top-0 z-40">
       <div className="px-4 py-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
-          <span className="text-sidebar-foreground font-bold tracking-tight">ISOCITY</span>
+          <span className="text-sidebar-foreground font-bold tracking-tight">
+            {isFloodGuard ? 'FLOODGUARD' : 'ISOCITY'}
+          </span>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={openCommandMenu}
-              title="Search (⌘K)"
+              title="Cari (⌘K)"
               className="h-7 w-7 text-muted-foreground hover:text-sidebar-foreground"
             >
               <svg 
@@ -591,7 +608,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowShareModal(true)}
-                title="Invite Players"
+                title="Undang Pemain"
                 className="h-7 w-7 text-muted-foreground hover:text-sidebar-foreground"
               >
                 <Users className="w-4 h-4" />
@@ -602,7 +619,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowExitDialog(true)}
-                title="Exit to Main Menu"
+                title="Keluar ke Menu Utama"
                 className="h-7 w-7 text-muted-foreground hover:text-sidebar-foreground"
               >
                 <svg 
@@ -623,8 +640,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
         {/* Direct categories (TOOLS, ZONES) */}
         {Object.entries(directCategories).map(([category, tools]) => (
           <div key={category} className="mb-1">
-            {/* Separator above ZONES */}
-            {category === 'ZONES' && (
+            {!isFloodGuard && category === 'ZONES' && (
               <div className="mx-4 my-2 h-px bg-sidebar-border/50" />
             )}
             <div className="px-4 py-2 text-[10px] font-bold tracking-widest text-muted-foreground">
@@ -636,6 +652,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                 if (!info) return null;
                 const isSelected = selectedTool === tool;
                 const canAfford = stats.money >= info.cost;
+                const ToolIcon = ToolIcons[tool];
                 
                 return (
                   <Button
@@ -646,8 +663,11 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                     className={`w-full justify-start gap-3 px-3 py-2 h-auto text-sm ${
                       isSelected ? 'bg-primary text-primary-foreground' : ''
                     }`}
-                    title={`${m(info.description)}${info.cost > 0 ? ` - Cost: $${info.cost}` : ''}`}
+                    title={`${m(info.description)}${info.cost > 0 ? ` - Biaya: $${info.cost}` : ''}`}
                   >
+                    {ToolIcon && (
+                      <ToolIcon size={16} className="shrink-0 opacity-80" />
+                    )}
                     <span className="flex-1 text-left truncate">{m(info.name)}</span>
                     {info.cost > 0 && (
                       <span className="text-xs opacity-60">${info.cost}</span>
@@ -656,15 +676,14 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                 );
               })}
               {/* Expand City submenu - appears after TOOLS category */}
-              {category === 'TOOLS' && (
+              {!isFloodGuard && category === 'TOOLS' && (
                 <ActionSubmenu
                   key="expandCity"
                   label={CATEGORY_LABELS.expandCity}
                   actions={expandCityActions}
                 />
               )}
-              {/* Zoning submenu - appears after ZONES category */}
-              {category === 'ZONES' && (
+              {!isFloodGuard && category === 'ZONES' && (
                 <HoverSubmenu
                   key={zoningSubmenu.key}
                   label={zoningSubmenu.label}

@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { Bus, Car, CarDirection, EmergencyVehicle, EmergencyVehicleType, Pedestrian, PedestrianDestType, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from './types';
-import { BUS_COLORS, BUS_MIN_POPULATION, BUS_MIN_ZOOM, BUS_SPEED_MAX, BUS_SPEED_MIN, BUS_SPAWN_INTERVAL_MAX, BUS_SPAWN_INTERVAL_MIN, BUS_STOP_DURATION_MAX, BUS_STOP_DURATION_MIN, CAR_COLORS, CAR_MIN_ZOOM, CAR_MIN_ZOOM_MOBILE, DIRECTION_META, MAX_BUSES, MAX_BUSES_MOBILE, PEDESTRIAN_MAX_COUNT, PEDESTRIAN_MAX_COUNT_MOBILE, PEDESTRIAN_MIN_ZOOM, PEDESTRIAN_MIN_ZOOM_MOBILE, PEDESTRIAN_ROAD_TILE_DENSITY, PEDESTRIAN_ROAD_TILE_DENSITY_MOBILE, PEDESTRIAN_SPAWN_BATCH_SIZE, PEDESTRIAN_SPAWN_BATCH_SIZE_MOBILE, PEDESTRIAN_SPAWN_INTERVAL, PEDESTRIAN_SPAWN_INTERVAL_MOBILE, VEHICLE_FAR_ZOOM_THRESHOLD } from './constants';
+import { BUS_COLORS, BUS_MIN_POPULATION, BUS_MIN_ZOOM, BUS_SPEED_MAX, BUS_SPEED_MIN, BUS_SPAWN_INTERVAL_MAX, BUS_SPAWN_INTERVAL_MIN, BUS_STOP_DURATION_MAX, BUS_STOP_DURATION_MIN, CAR_COLORS, CAR_MIN_ZOOM, CAR_MIN_ZOOM_MOBILE, DIRECTION_META, FLOODGUARD_BPBD_TRUCK_COLORS, MAX_BUSES, MAX_BUSES_MOBILE, PEDESTRIAN_MAX_COUNT, PEDESTRIAN_MAX_COUNT_MOBILE, PEDESTRIAN_MIN_ZOOM, PEDESTRIAN_MIN_ZOOM_MOBILE, PEDESTRIAN_ROAD_TILE_DENSITY, PEDESTRIAN_ROAD_TILE_DENSITY_MOBILE, PEDESTRIAN_SPAWN_BATCH_SIZE, PEDESTRIAN_SPAWN_BATCH_SIZE_MOBILE, PEDESTRIAN_SPAWN_INTERVAL, PEDESTRIAN_SPAWN_INTERVAL_MOBILE, VEHICLE_FAR_ZOOM_THRESHOLD } from './constants';
 import { isRoadTile, getDirectionOptions, pickNextDirection, findPathOnRoads, getDirectionToTile, gridToScreen } from './utils';
 import { findBusStops, findResidentialBuildings, findPedestrianDestinations, findStations, findFires, findRecreationAreas, findEnterableBuildings, SPORTS_TYPES, ACTIVE_RECREATION_TYPES } from './gridFinders';
 import { drawPedestrians as drawPedestriansUtil } from './drawPedestrians';
@@ -57,9 +57,7 @@ export interface VehicleSystemState {
   // PERF: Pre-computed intersection map to avoid repeated getDirectionOptions() calls per-car per-frame
   cachedIntersectionMapRef: React.MutableRefObject<{ map: Map<number, boolean>; gridVersion: number }>;
   state: {
-    services: {
-      police: number[][];
-    };
+    services: import('@/types/game').ServiceCoverage;
     stats: {
       population: number;
     };
@@ -126,7 +124,9 @@ export function useVehicleSystems(
         speed: (0.35 + Math.random() * 0.35) * 0.7,
         age: 0,
         maxAge: carMaxAge,
-        color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
+        color: worldStateRef.current.selectedRegion
+          ? FLOODGUARD_BPBD_TRUCK_COLORS[Math.floor(Math.random() * FLOODGUARD_BPBD_TRUCK_COLORS.length)]
+          : CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
         laneOffset: laneSign * baseLaneOffset,
       });
       return true;
@@ -526,7 +526,7 @@ export function useVehicleSystems(
         const hasActivity = tile.building.population > 0 || tile.building.jobs > 0;
         
         if (isBuilding && hasActivity) {
-          const policeCoverage = state.services.police[y]?.[x] || 0;
+          const policeCoverage = state.services.evacuation[y]?.[x] || 0;
           eligibleTiles.push({ x, y, policeCoverage });
         }
       }
@@ -570,7 +570,7 @@ export function useVehicleSystems(
         timeRemaining: duration,
       });
     }
-  }, [worldStateRef, crimeSpawnTimerRef, activeCrimeIncidentsRef, state.services.police, state.stats.population]);
+  }, [worldStateRef, crimeSpawnTimerRef, activeCrimeIncidentsRef, state.services.evacuation, state.stats.population]);
 
   const updateCrimeIncidents = useCallback((delta: number) => {
     const { speed: currentSpeed } = worldStateRef.current;
@@ -936,11 +936,9 @@ export function useVehicleSystems(
     }
     
     // Target ~0.5 cars per road tile on desktop, ~0.15 on mobile (for performance)
-    // This ensures large maps with more roads get proportionally more cars
-    const carDensity = isMobile ? 0.15 : 0.5;
-    const targetCars = Math.floor(roadTileCount * carDensity);
-    // Cap at 800 for desktop, 60 for mobile - minimum 10/15 for small cities
-    const maxCars = isMobile 
+    const baseDensity = isMobile ? 0.15 : 0.5;
+    const targetCars = Math.floor(roadTileCount * baseDensity);
+    const maxCars = isMobile
       ? Math.min(60, Math.max(10, targetCars))
       : Math.min(800, Math.max(15, targetCars));
     
@@ -1454,6 +1452,8 @@ export function useVehicleSystems(
 
       const scale = 0.5; // 30% smaller than original
       
+      const isFloodGuard = !!worldStateRef.current.selectedRegion;
+
       ctx.fillStyle = car.color;
       ctx.beginPath();
       ctx.moveTo(-10 * scale, -5 * scale);
@@ -1463,9 +1463,16 @@ export function useVehicleSystems(
       ctx.lineTo(-10 * scale, 5 * scale);
       ctx.closePath();
       ctx.fill();
-      
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.fillRect(-4 * scale, -2.8 * scale, 7 * scale, 5.6 * scale);
+
+      if (isFloodGuard) {
+        ctx.fillStyle = 'rgba(30, 30, 30, 0.85)';
+        ctx.fillRect(-9 * scale, -4.5 * scale, 14 * scale, 9 * scale);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.fillRect(-7 * scale, -3.5 * scale, 10 * scale, 7 * scale);
+      } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillRect(-4 * scale, -2.8 * scale, 7 * scale, 5.6 * scale);
+      }
       
       ctx.fillStyle = '#111827';
       ctx.fillRect(-10 * scale, -4 * scale, 2.4 * scale, 8 * scale);
