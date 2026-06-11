@@ -603,7 +603,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
               </svg>
             </Button>
             {/* Invite button - only show if in multiplayer context */}
-            {multiplayer && (
+            {multiplayer && !selectedRegion && (
               <Button
                 variant="ghost"
                 size="icon-sm"

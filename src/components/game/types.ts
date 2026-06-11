@@ -554,7 +554,9 @@ export type OverlayMode =
   | 'subway'
   | 'terrain_elevation'
   | 'flood_risk'
-  | 'flood_level';
+  | 'flood_level'
+  | 'pump_coverage'
+  | 'drain_coverage';
 
 // ============================================================================
 // Train Types

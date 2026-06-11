@@ -63,8 +63,13 @@ export function useAircraftSystems(
 
   // Update airplanes - spawn, move, and manage lifecycle
   const updateAirplanes = useCallback((delta: number) => {
-    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom, selectedRegion } = worldStateRef.current;
     
+    if (selectedRegion) {
+      airplanesRef.current = [];
+      return;
+    }
+
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
       return;
     }

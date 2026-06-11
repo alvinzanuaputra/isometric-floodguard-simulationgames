@@ -15,7 +15,8 @@ export type TipId =
   | 'alat_mitigasi'
   | 'musim_hujan'
   | 'prakiraan_cuaca'
-  | 'target_menang';
+  | 'target_menang'
+  | 'tier_rendah';
 
 export interface TipDefinition {
   id: TipId;
@@ -96,6 +97,16 @@ const TIP_DEFINITIONS: TipDefinition[] = [
       if (!state.selectedRegion || !state.weatherState) return false;
       const forecast = state.weatherState.forecastHours ?? [];
       return forecast.some((h) => h >= 10);
+    },
+  },
+  {
+    id: 'tier_rendah',
+    message:
+      'Hindari menempatkan infrastruktur hanya di dataran tinggi. Area merah di overlay Risiko Banjir adalah prioritas utama — pompa dan tanggul paling efektif di sana.',
+    priority: 2,
+    check: (state) => {
+      if (!state.selectedRegion) return false;
+      return countMitigationTools(state) < 2;
     },
   },
   {

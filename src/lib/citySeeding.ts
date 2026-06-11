@@ -323,6 +323,36 @@ export function seedFloodGuardCity(
     }
   }
 
+  // Demo infrastruktur mitigasi di area rawan (tier rendah) — panduan visual pemain
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const x = minX + Math.floor(Math.random() * Math.max(1, mapData.dataWidth - 2));
+    const y = minY + Math.floor(Math.random() * Math.max(1, mapData.dataHeight - 2));
+    const idx = tileIndex(mapData, x, y);
+    if (mapData.tier[idx] > 1) continue;
+    if (!nearRoad(grid, x, y)) continue;
+    if (!isPlayableGrass(grid, mapData, x, y)) continue;
+    if (placeMultiTile(grid, mapData, x, y, 'flood_pump', 'none', false)) {
+      const origin = grid[y][x].building;
+      origin.isSeeded = false;
+      origin.constructionProgress = 100;
+      break;
+    }
+  }
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const x = minX + Math.floor(Math.random() * mapData.dataWidth);
+    const y = minY + Math.floor(Math.random() * mapData.dataHeight);
+    const idx = tileIndex(mapData, x, y);
+    if (mapData.tier[idx] > 2) continue;
+    if (!nearRoad(grid, x, y)) continue;
+    if (!isPlayableGrass(grid, mapData, x, y)) continue;
+    const tile = grid[y][x];
+    tile.building = createSeededBuilding('levee', 1);
+    tile.building.isSeeded = false;
+    tile.building.constructionProgress = 100;
+    tile.zone = 'none';
+    break;
+  }
+
   let population = 0;
   let jobs = 0;
   for (let y = 0; y < n; y++) {

@@ -771,6 +771,15 @@ function createTile(x: number, y: number, buildingType: BuildingType = 'grass'):
 // Building types that don't require construction (already complete when placed)
 const NO_CONSTRUCTION_TYPES: BuildingType[] = ['grass', 'empty', 'water', 'road', 'bridge', 'tree'];
 
+/** Infrastruktur banjir aktif segera setelah dipasang pemain. */
+const FLOOD_INFRA_TYPES: BuildingType[] = [
+  'flood_pump',
+  'levee',
+  'retention_pond',
+  'drain_channel',
+  'evacuation_post',
+];
+
 function createBuilding(type: BuildingType): Building {
   // Buildings that don't require construction start at 100% complete
   const constructionProgress = NO_CONSTRUCTION_TYPES.includes(type) ? 100 : 0;
@@ -2303,8 +2312,8 @@ export function simulateTick(state: GameState): GameState {
         }
       }
 
-      // Check for road access and grow buildings in zones
-      if (tile.zone !== 'none' && tile.building.type === 'grass') {
+      // Check for road access and grow buildings in zones (FloodGuard: tidak ada spawn otomatis)
+      if (!state.selectedRegion && tile.zone !== 'none' && tile.building.type === 'grass') {
         const roadAccess = hasRoadAccess(newGrid, x, y, size);
         const hasPower = newPowered;
         const hasWater = newWatered;
@@ -2354,8 +2363,8 @@ export function simulateTick(state: GameState): GameState {
       const buildingStats = BUILDING_STATS[tile.building.type];
       tile.pollution = Math.max(0, tile.pollution * 0.95 + (buildingStats?.pollution || 0));
 
-      // Fire simulation
-      if (state.disastersEnabled && tile.building.onFire) {
+      // Fire simulation (nonaktif di mode FloodGuard)
+      if (!state.selectedRegion && state.disastersEnabled && tile.building.onFire) {
         const fireCoverage = services.rescue[y][x];
         const fightingChance = fireCoverage / 300;
         
@@ -2371,9 +2380,8 @@ export function simulateTick(state: GameState): GameState {
         }
       }
 
-      // Fire spread to adjacent buildings
-      // Check if any neighboring tile is on fire and spread with a chance reduced by fire coverage
-      if (state.disastersEnabled && !tile.building.onFire &&
+      // Fire spread to adjacent buildings (nonaktif di mode FloodGuard)
+      if (!state.selectedRegion && state.disastersEnabled && !tile.building.onFire &&
           tile.building.type !== 'grass' && tile.building.type !== 'water' &&
           tile.building.type !== 'road' && tile.building.type !== 'tree' &&
           tile.building.type !== 'empty' && tile.building.type !== 'bridge' &&
@@ -2408,8 +2416,8 @@ export function simulateTick(state: GameState): GameState {
         }
       }
 
-      // Random fire start
-      if (state.disastersEnabled && !tile.building.onFire && 
+      // Random fire start (nonaktif di mode FloodGuard)
+      if (!state.selectedRegion && state.disastersEnabled && !tile.building.onFire && 
           tile.building.type !== 'grass' && tile.building.type !== 'water' && 
           tile.building.type !== 'road' && tile.building.type !== 'tree' &&
           tile.building.type !== 'empty' &&
@@ -2470,11 +2478,11 @@ export function simulateTick(state: GameState): GameState {
   const newStats = calculateStats(newGrid, size, newBudget, state.taxRate, newEffectiveTaxRate, services);
   newStats.money = state.stats.money;
 
-  // Smooth demand to prevent flickering in large cities
-  // Rate of change: 12% of difference per tick, so changes stabilize in ~20-30 ticks (~1 game day)
-  // This is faster than tax rate smoothing (3%) to stay responsive, but slow enough to eliminate flicker
+  // Smooth demand to prevent flickering in large cities (FloodGuard: pertahankan demand statis)
   const prevDemand = state.stats.demand;
-  if (prevDemand) {
+  if (state.selectedRegion && prevDemand) {
+    newStats.demand = { ...prevDemand };
+  } else if (prevDemand) {
     const smoothingFactor = 0.12;
     newStats.demand.residential = prevDemand.residential + (newStats.demand.residential - prevDemand.residential) * smoothingFactor;
     newStats.demand.commercial = prevDemand.commercial + (newStats.demand.commercial - prevDemand.commercial) * smoothingFactor;
@@ -2528,12 +2536,19 @@ export function simulateTick(state: GameState): GameState {
   // Update history quarterly
   const history = [...state.history];
   if (newMonth % 3 === 0 && newDay === 1 && newTick === 0) {
+    const floodHistory = state.selectedRegion && state.floodStats;
     history.push({
       year: newYear,
       month: newMonth,
       population: newStats.population,
       money: newStats.money,
-      happiness: newStats.happiness,
+      happiness: floodHistory ? state.floodStats!.safetyIndex : newStats.happiness,
+      ...(floodHistory
+        ? {
+            safetyIndex: state.floodStats!.safetyIndex,
+            floodedRatio: state.floodStats!.floodedRatio,
+          }
+        : {}),
     });
     // Keep last 100 entries
     while (history.length > 100) {
@@ -2682,6 +2697,7 @@ function canPlaceMultiTileBuilding(
     for (let dx = 0; dx < width; dx++) {
       const tile = grid[y + dy]?.[x + dx];
       if (!tile) return false;
+      if (tile.playable === false) return false;
       // Can only build on grass or trees - roads must be bulldozed first
       if (tile.building.type !== 'grass' && tile.building.type !== 'tree') {
         return false;
@@ -2842,6 +2858,9 @@ function applyBuildingFootprint(
         cell.building = createBuilding(buildingType);
         cell.building.level = level;
         cell.building.age = 0;
+        if (FLOOD_INFRA_TYPES.includes(buildingType)) {
+          cell.building.constructionProgress = 100;
+        }
         if (services) {
           cell.building.powered = services.pumpCoverage[originY + dy][originX + dx];
           cell.building.watered = services.drainCoverage[originY + dy][originX + dx];
@@ -3010,6 +3029,9 @@ export function placeBuilding(
       } else {
         // Normal placement
         newGrid[y][x].building = createBuilding(buildingType);
+        if (FLOOD_INFRA_TYPES.includes(buildingType)) {
+          newGrid[y][x].building.constructionProgress = 100;
+        }
         newGrid[y][x].zone = 'none';
         // Clear rail overlay if placing non-combined building
         if (buildingType !== 'road') {

@@ -19,6 +19,7 @@ const REGION_WIN_LOSE = {
   Pusat: { winSurvivalDays: 7 },
   Selatan: { winSurvivalDays: 10 },
   Timur: { winSurvivalDays: 14 },
+  Utara: { winSurvivalDays: 18 },
 };
 
 const NO_CONSTRUCTION = new Set(['grass', 'empty', 'water', 'road', 'bridge', 'tree', 'drain_channel']);
@@ -349,6 +350,32 @@ const examples = [
       { dx: -3, dy: -5, type: 'drain_channel' },
       { dx: 3, dy: -5, type: 'drain_channel' },
     ], 11),
+  },
+  {
+    file: 'floodguard_selatan.json',
+    state: buildFloodGuardState('Selatan', 'Contoh — Surabaya Selatan', [
+      { dx: -2, dy: -2, w: 2, h: 2, type: 'flood_pump' },
+      { dx: 3, dy: -2, w: 3, h: 3, type: 'retention_pond' },
+      { dx: -5, dy: 0, type: 'levee' },
+      { dx: 5, dy: 0, type: 'levee' },
+      { dx: 0, dy: 4, type: 'evacuation_post' },
+      { dx: -4, dy: 3, type: 'drain_channel' },
+      { dx: 4, dy: 3, type: 'drain_channel' },
+    ], 8),
+  },
+  {
+    file: 'floodguard_utara.json',
+    state: buildFloodGuardState('Utara', 'Contoh — Surabaya Utara', [
+      { dx: -2, dy: -2, w: 2, h: 2, type: 'flood_pump' },
+      { dx: 2, dy: -3, w: 3, h: 3, type: 'retention_pond' },
+      { dx: -6, dy: 1, type: 'levee' },
+      { dx: -5, dy: 2, type: 'levee' },
+      { dx: 6, dy: 1, type: 'levee' },
+      { dx: 0, dy: 5, type: 'evacuation_post' },
+      { dx: -3, dy: -6, type: 'drain_channel' },
+      { dx: 3, dy: -6, type: 'drain_channel' },
+      { dx: 0, dy: -4, type: 'drain_channel' },
+    ], 3),
   },
   {
     file: 'floodguard_timur.json',

@@ -1,0 +1,52 @@
+---
+description: Aturan FloodGuard Surabaya — dual-mode, koherensi banjir, guard legacy IsoCity
+alwaysApply: true
+---
+
+# FloodGuard Surabaya — Aturan Pengembangan
+
+## Dual-mode (WAJIB)
+
+Proyek punya dua jalur:
+- **FloodGuard** — `state.selectedRegion` ada (peta wilayah Surabaya)
+- **IsoCity legacy** — `!state.selectedRegion` (sandbox kota lama)
+
+Semua perubahan gameplay/visual FloodGuard **harus** di-guard:
+
+```typescript
+if (state.selectedRegion) {
+  // perilaku FloodGuard
+} else {
+  // perilaku IsoCity — jangan ubah tanpa alasan
+}
+```
+
+## Jangan sentuh tanpa permintaan eksplisit
+
+- Fisika air di `floodSimulation.ts` (aliran, evaporasi, threshold menang/kalah)
+- Konstanta tuning di `floodTuning.ts` / `regionConfig.ts` (kecuali bug jelas)
+
+## Render & performa
+
+- **JANGAN** panggil `loadSpriteImage()` di dalam loop render `drawBuilding` — freeze UI
+- Preload asset di `useEffect` saja; placeholder sampai cache siap
+- Urutan z-index canvas (jangan ubah tanpa alasan):
+  - terrain → flood z-1 → cars z-2 → buildings z-4 → hover z-5 → air z-6 → lighting z-7
+
+## UI & bahasa
+
+- Teks UI baru: **Bahasa Indonesia**
+- Locale: `id` saja (`gt.config.json`)
+
+## Prioritas
+
+Koherensi simulasi banjir > fitur baru. Kota tetap hidup (mobil, kapal, helikopter SAR) tapi loop IsoCity (kebakaran, kejahatan, demand, pesawat komersial) dimatikan di mode FloodGuard.
+
+## Quality gate
+
+Setiap perubahan: `npx tsc --noEmit` + `npm run build` lulus.
+
+## Acuan
+
+- Rencana master: `agent/floodguard-plan.md`
+- Prompt gelombang: `agent/prompt/wave-*.md`

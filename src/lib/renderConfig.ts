@@ -691,9 +691,10 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     park_large: 'park_large',
     tennis: 'tennis',
     power_plant: 'power_plant',
+    /** FloodGuard: reuse sprite + canvas tint (player-placed). Fase 9: sheet khusus. */
     flood_pump: 'power_plant',
     water_tower: 'water_tower',
-    levee: 'rail',
+    levee: 'industrial',
     retention_pond: 'park_large',
     drain_channel: 'road',
     evacuation_post: 'police_station',

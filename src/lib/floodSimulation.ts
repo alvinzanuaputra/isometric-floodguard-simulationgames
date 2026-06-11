@@ -5,6 +5,7 @@
 
 import { REGION_WIN_LOSE } from '@/lib/regionConfig';
 import { floodTuning } from '@/lib/floodTuning';
+import { getBuildingSize } from '@/lib/simulation';
 import {
   FloodRegion,
   FloodStats,
@@ -221,6 +222,23 @@ export function simulateFloodTick(
     }
   }
 
+  // Waduk 3×3: tandai seluruh footprint (tile 'empty' ikut)
+  const pondSize = getBuildingSize('retention_pond');
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (grid[y][x].building.type !== 'retention_pond') continue;
+      for (let dy = 0; dy < pondSize.height; dy++) {
+        for (let dx = 0; dx < pondSize.width; dx++) {
+          const ny = y + dy;
+          const nx = x + dx;
+          if (ny < size && nx < size) {
+            isRetention[ny * size + nx] = 1;
+          }
+        }
+      }
+    }
+  }
+
   const rainMeters = weather.rainfallRate * floodTuning.rainAbsorption;
 
   // (a) Input hujan
@@ -321,35 +339,47 @@ export function simulateFloodTick(
     newWater[i] = Math.max(0, newWater[i] + delta[i]);
   }
 
-  // (d) Waduk penampung — serap dari tetangga
+  // (d) Waduk penampung — serap dari tetangga (seluruh perimeter footprint 3×3)
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const idx = y * size + x;
-      if (!isRetention[idx]) continue;
-      const tile = grid[y][x];
-      const stored = tile.building.storedVolume ?? 0;
+      if (grid[y][x].building.type !== 'retention_pond') continue;
+      const originTile = grid[y][x];
+      let stored = originTile.building.storedVolume ?? 0;
       const cap = floodTuning.retentionCapacity;
       if (stored >= cap) continue;
-      const neighbors: number[] = [];
-      if (y > 0) neighbors.push(idx - size);
-      if (x < size - 1) neighbors.push(idx + 1);
-      if (y < size - 1) neighbors.push(idx + size);
-      if (x > 0) neighbors.push(idx - 1);
+
+      const absorbCells: number[] = [];
+      for (let dy = 0; dy < pondSize.height; dy++) {
+        for (let dx = 0; dx < pondSize.width; dx++) {
+          absorbCells.push((y + dy) * size + (x + dx));
+        }
+      }
+
       let absorbed = 0;
-      for (const ni of neighbors) {
-        if (!isLand[ni]) continue;
-        const take = Math.min(
-          floodTuning.retentionAbsorb,
-          newWater[ni],
-          cap - stored - absorbed
-        );
-        if (take > 0) {
-          newWater[ni] -= take;
-          absorbed += take;
+      for (const cellIdx of absorbCells) {
+        const cx = cellIdx % size;
+        const cy = Math.floor(cellIdx / size);
+        const neighbors: number[] = [];
+        if (cy > 0) neighbors.push(cellIdx - size);
+        if (cx < size - 1) neighbors.push(cellIdx + 1);
+        if (cy < size - 1) neighbors.push(cellIdx + size);
+        if (cx > 0) neighbors.push(cellIdx - 1);
+        for (const ni of neighbors) {
+          if (isRetention[ni]) continue;
+          if (!isLand[ni]) continue;
+          const take = Math.min(
+            floodTuning.retentionAbsorb,
+            newWater[ni],
+            cap - stored - absorbed
+          );
+          if (take > 0) {
+            newWater[ni] -= take;
+            absorbed += take;
+          }
         }
       }
       if (absorbed > 0) {
-        tile.building.storedVolume = stored + absorbed;
+        originTile.building.storedVolume = stored + absorbed;
       }
     }
   }

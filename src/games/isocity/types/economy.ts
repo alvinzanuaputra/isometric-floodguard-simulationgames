@@ -52,4 +52,8 @@ export interface HistoryPoint {
   population: number;
   money: number;
   happiness: number;
+  /** Indeks keselamatan banjir (FloodGuard). */
+  safetyIndex?: number;
+  /** Rasio tergenang 0–1 (FloodGuard). */
+  floodedRatio?: number;
 }

@@ -4,7 +4,6 @@ import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { useMessages, T, Var, useGT } from 'gt-next';
 import { useGame } from '@/context/GameContext';
 import { TOOL_INFO, Tile, Building, BuildingType, AdjacentCity, Tool } from '@/types/game';
-import { RENDER_THRESHOLD } from '@/lib/floodSimulation';
 import { getBuildingSize, requiresWaterAdjacency, getWaterAdjacency } from '@/lib/simulation';
 import { FireIcon, SafetyIcon } from '@/components/ui/Icons';
 import { getSpriteCoords, BUILDING_TO_SPRITE, SPRITE_VERTICAL_OFFSETS, SPRITE_HORIZONTAL_OFFSETS, getActiveSpritePack } from '@/lib/renderConfig';
@@ -65,13 +64,15 @@ import {
 import { SERVICE_CONFIG, SERVICE_RANGE_INCREASE_PER_LEVEL } from '@/lib/simulation';
 import { drawPlaceholderBuilding } from '@/components/game/placeholders';
 import { loadImage, loadSpriteImage, onImageLoaded, getCachedImage, preloadSpritePackSheets } from '@/components/game/imageLoader';
-import {
-  drawPlayerFloodBuilding,
-  preloadPlayerFloodBuildingAssets,
-  shouldUsePlayerFloodAsset,
-} from '@/components/game/floodBuildingAssets';
+import { shouldUsePlayerFloodAsset } from '@/components/game/floodBuildingAssets';
 import { drawBuildingLabel, getPlayerBuildingLabel, shouldShowBuildingLabel } from '@/components/game/buildingLabels';
-import { shouldRenderSurfaceFlood } from '@/components/game/floodRender';
+import {
+  drawFloodWaterLayer,
+  ensureFloodWaterVisualState,
+  getFloodWaterCutoff,
+  updateFloodWaterVisuals,
+  type FloodWaterVisualState,
+} from '@/components/game/floodWaterVisuals';
 import { TileInfoPanel } from '@/components/game/panels';
 import {
   findMarinasAndPiers,
@@ -824,7 +825,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
 
   // Update trains - spawn, move, and manage lifecycle
   const updateTrains = useCallback((delta: number) => {
-    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, selectedRegion } = worldStateRef.current;
+
+    if (selectedRegion) {
+      trainsRef.current = [];
+      return;
+    }
 
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
       return;
@@ -900,7 +906,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   useEffect(() => {
     // Semua sheet (termasuk dense/shops/services/parks untuk bangunan seeded) dimuat paralel
     preloadSpritePackSheets(currentSpritePack);
-    preloadPlayerFloodBuildingAssets();
     loadImage(WATER_ASSET_PATH).catch(console.error);
     loadSpriteImage(AIRPLANE_SPRITE_SRC, false).catch(console.error);
   }, [currentSpritePack]);
@@ -1320,6 +1325,28 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const w = TILE_WIDTH;
       const h = TILE_HEIGHT;
       
+      // Tanggul — barrier procedural (bukan sprite rel)
+      if (buildingType === 'levee' && (tile.building.constructionProgress ?? 100) >= 100) {
+        ctx.save();
+        const wallH = h * 0.55;
+        const topY = y - wallH * 0.35;
+        ctx.fillStyle = '#6b7280';
+        ctx.beginPath();
+        ctx.moveTo(x, y + h / 2);
+        ctx.lineTo(x + w / 2, y);
+        ctx.lineTo(x + w, y + h / 2);
+        ctx.lineTo(x + w / 2, y + h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillRect(x + w * 0.08, topY, w * 0.84, wallH);
+        ctx.strokeStyle = '#374151';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + w * 0.08, topY, w * 0.84, wallH);
+        ctx.restore();
+        return;
+      }
+
       // Handle roads & saluran drainase (reuse road procedural + tint biru)
       if (buildingType === 'road' || buildingType === 'drain_channel') {
         drawRoad(ctx, x, y, tile.x, tile.y, zoom, roadDrawingOptions);
@@ -1551,18 +1578,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             return;
           }
 
-          // Bangunan banjir player-placed: PNG individual (tanpa latar merah sprite sheet)
-          if (
+          const isPlayerFloodInfra =
             shouldUsePlayerFloodAsset(tile) &&
-            (tile.building.constructionProgress ?? 100) >= 100
-          ) {
-            if (drawPlayerFloodBuilding(ctx, x, y, tile, w, h)) {
-              return;
-            }
-            drawPlaceholderBuilding(ctx, x, y, buildingType, w, h);
-            return;
-          }
-          
+            (tile.building.constructionProgress ?? 100) >= 100;
+
           // Use extracted utilities to determine sprite source, coords, scale, and offsets
           const spriteSourceInfo = selectSpriteSource(buildingType, tile.building, tile.x, tile.y, activePack);
           const filteredSpriteSheet = getCachedImage(spriteSourceInfo.source, true);
@@ -1654,6 +1673,27 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                   Math.round(drawX), Math.round(drawY),
                   Math.round(destWidth), Math.round(destHeight)
                 );
+              }
+
+              if (isPlayerFloodInfra) {
+                const floodTints: Partial<Record<BuildingType, string>> = {
+                  flood_pump: 'rgba(59, 130, 246, 0.32)',
+                  retention_pond: 'rgba(29, 78, 216, 0.28)',
+                  evacuation_post: 'rgba(249, 115, 22, 0.28)',
+                };
+                const tint = floodTints[buildingType];
+                if (tint) {
+                  ctx.save();
+                  ctx.globalCompositeOperation = 'source-atop';
+                  ctx.fillStyle = tint;
+                  ctx.fillRect(
+                    Math.round(drawX),
+                    Math.round(drawY),
+                    Math.round(destWidth),
+                    Math.round(destHeight)
+                  );
+                  ctx.restore();
+                }
               }
 
             } else {
@@ -1776,7 +1816,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           overlayMode !== 'none' &&
           (overlayMode === 'terrain_elevation' ||
           overlayMode === 'flood_risk' ||
-          overlayMode === 'flood_level'
+          overlayMode === 'flood_level' ||
+          overlayMode === 'pump_coverage' ||
+          overlayMode === 'drain_coverage'
             ? true
             : overlayMode === 'subway'
               ? tile.building.type !== 'water'
@@ -2062,6 +2104,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             evacuation: state.services.evacuation[tile.y][tile.x],
             medical: state.services.medical[tile.y][tile.x],
             preparedness: state.services.preparedness[tile.y][tile.x],
+            pump: state.services.pumpCoverage[tile.y][tile.x],
+            drain: state.services.drainCoverage[tile.y][tile.x],
           };
           
           const fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
@@ -2086,6 +2130,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           overlayMode !== 'terrain_elevation' &&
           overlayMode !== 'flood_risk' &&
           overlayMode !== 'flood_level' &&
+          overlayMode !== 'pump_coverage' &&
+          overlayMode !== 'drain_coverage' &&
           serviceBuildingTypes.length > 0
         ) {
           const circleColor = OVERLAY_CIRCLE_COLORS[overlayMode];
@@ -2154,6 +2200,53 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               buildingsCtx.beginPath();
               buildingsCtx.arc(centerX, centerY, 4 / zoom, 0, Math.PI * 2);
               buildingsCtx.fill();
+            }
+          }
+        }
+
+        // Lingkaran cakupan pompa / drainase (FloodGuard)
+        if (overlayMode === 'pump_coverage' || overlayMode === 'drain_coverage') {
+          const floodTypes = OVERLAY_TO_BUILDING_TYPES[overlayMode];
+          const circleColor = OVERLAY_CIRCLE_COLORS[overlayMode];
+          const circleFillColor = OVERLAY_CIRCLE_FILL_COLORS[overlayMode];
+          const highlightColor = OVERLAY_HIGHLIGHT_COLORS[overlayMode];
+
+          for (let fy = 0; fy < gridSize; fy++) {
+            for (let fx = 0; fx < gridSize; fx++) {
+              const ftile = grid[fy][fx];
+              if (!floodTypes.includes(ftile.building.type)) continue;
+              if (ftile.building.isSeeded) continue;
+              if ((ftile.building.constructionProgress ?? 100) < 100) continue;
+
+              const config = SERVICE_CONFIG[ftile.building.type as keyof typeof SERVICE_CONFIG];
+              if (!config || !('range' in config)) continue;
+              const baseRange = config.range;
+              const effectiveRange = baseRange * (1 + (ftile.building.level - 1) * SERVICE_RANGE_INCREASE_PER_LEVEL);
+              const range = Math.floor(effectiveRange);
+
+              const { screenX: bldgScreenX, screenY: bldgScreenY } = gridToScreen(fx, fy, 0, 0);
+              const centerX = bldgScreenX + halfTileWidth;
+              const centerY = bldgScreenY + halfTileHeight;
+              const radiusX = range * halfTileWidth;
+              const radiusY = range * halfTileHeight;
+
+              buildingsCtx.strokeStyle = circleColor;
+              buildingsCtx.lineWidth = 2 / zoom;
+              buildingsCtx.beginPath();
+              buildingsCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+              buildingsCtx.stroke();
+              buildingsCtx.fillStyle = circleFillColor;
+              buildingsCtx.fill();
+
+              buildingsCtx.strokeStyle = highlightColor;
+              buildingsCtx.lineWidth = 3 / zoom;
+              buildingsCtx.beginPath();
+              buildingsCtx.moveTo(bldgScreenX + halfTileWidth, bldgScreenY);
+              buildingsCtx.lineTo(bldgScreenX + tileWidth, bldgScreenY + halfTileHeight);
+              buildingsCtx.lineTo(bldgScreenX + halfTileWidth, bldgScreenY + tileHeight);
+              buildingsCtx.lineTo(bldgScreenX, bldgScreenY + halfTileHeight);
+              buildingsCtx.closePath();
+              buildingsCtx.stroke();
             }
           }
         }
@@ -2259,18 +2352,39 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const isBuildingTool = selectedTool && !nonBuildingTools.includes(selectedTool);
       
       if (isBuildingTool) {
-        // Get building size and draw preview for all tiles in footprint
         const buildingType = selectedTool as BuildingType;
         const buildingSize = getBuildingSize(buildingType);
-        
-        // Draw highlight for each tile in the building footprint
+        const roadAllowed = buildingType === 'levee' || buildingType === 'drain_channel';
+        let footprintValid = true;
+
+        for (let dx = 0; dx < buildingSize.width; dx++) {
+          for (let dy = 0; dy < buildingSize.height; dy++) {
+            const tx = hoveredTile.x + dx;
+            const ty = hoveredTile.y + dy;
+            if (tx < 0 || tx >= gridSize || ty < 0 || ty >= gridSize) {
+              footprintValid = false;
+              continue;
+            }
+            const ht = grid[ty][tx];
+            if (ht.playable === false || ht.building.type === 'water') {
+              footprintValid = false;
+            } else {
+              const allowed = roadAllowed ? ['grass', 'tree', 'road'] : ['grass', 'tree'];
+              if (!allowed.includes(ht.building.type)) footprintValid = false;
+            }
+          }
+        }
+
+        const fillColor = footprintValid ? 'rgba(34, 197, 94, 0.28)' : 'rgba(239, 68, 68, 0.32)';
+        const strokeColor = footprintValid ? '#22c55e' : '#ef4444';
+
         for (let dx = 0; dx < buildingSize.width; dx++) {
           for (let dy = 0; dy < buildingSize.height; dy++) {
             const tx = hoveredTile.x + dx;
             const ty = hoveredTile.y + dy;
             if (tx >= 0 && tx < gridSize && ty >= 0 && ty < gridSize) {
               const { screenX, screenY } = gridToScreen(tx, ty, 0, 0);
-              drawHighlight(screenX, screenY);
+              drawHighlight(screenX, screenY, fillColor, strokeColor);
             }
           }
         }
@@ -2418,7 +2532,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }, [hoveredTile, selectedTile, selectedTool, offset, zoom, gridSize, grid, isDragging, dragStartTile, dragEndTile]);
   
-  // Genangan air runtime — layer antara terrain & hover, throttle tiap 2 RAF
+  // Genangan air runtime — interpolasi level + animasi aliran gravitasi
+  const floodWaterVisualRef = useRef<FloodWaterVisualState | null>(null);
   useEffect(() => {
     const canvas = floodCanvasRef.current;
     if (!canvas) return;
@@ -2426,15 +2541,19 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     if (!ctx) return;
 
     let animationFrameId: number;
-    let frameCount = 0;
+    let lastTimeMs = performance.now();
 
-    const render = () => {
+    const render = (now: number) => {
       animationFrameId = requestAnimationFrame(render);
-      frameCount++;
-      if (frameCount % 2 !== 0) return;
+
+      const dt = Math.min(0.05, (now - lastTimeMs) / 1000);
+      lastTimeMs = now;
 
       const { grid: currentGrid, gridSize: n, offset: off, zoom: z } = worldStateRef.current;
       if (!currentGrid || n === 0) return;
+
+      floodWaterVisualRef.current = ensureFloodWaterVisualState(floodWaterVisualRef.current, n);
+      updateFloodWaterVisuals(floodWaterVisualRef.current, currentGrid, n, dt);
 
       const dpr = window.devicePixelRatio || 1;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2451,47 +2570,15 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const viewRight = viewWidth - off.x / z + TILE_WIDTH;
       const viewBottom = viewHeight - off.y / z + TILE_HEIGHT * 2;
 
-      const skipLowAtZoom = z < 0.5;
-      const waterCutoff = skipLowAtZoom ? 0.08 : RENDER_THRESHOLD;
-
-      for (let y = 0; y < n; y++) {
-        for (let x = 0; x < n; x++) {
-          const tile = currentGrid[y][x];
-          if (tile.playable === false || (tile.elevation ?? -1) < 0) continue;
-          const wl = tile.waterLevel;
-          if (wl <= waterCutoff) continue;
-          // Genangan hanya di permukaan terbuka — jangan gambar di footprint bangunan
-          if (!shouldRenderSurfaceFlood(tile)) continue;
-
-          const { screenX, screenY } = gridToScreen(x, y, 0, 0);
-          if (
-            screenX + TILE_WIDTH < viewLeft ||
-            screenX > viewRight ||
-            screenY + TILE_HEIGHT < viewTop ||
-            screenY > viewBottom
-          ) {
-            continue;
-          }
-
-          const alpha = Math.min(0.78, wl * 6);
-          const scale = Math.min(1, 0.35 + wl * 2.5);
-          const cx = screenX + TILE_WIDTH / 2;
-          const cy = screenY + TILE_HEIGHT * 0.62;
-
-          ctx.fillStyle = `rgba(30, 130, 230, ${alpha})`;
-          ctx.beginPath();
-          ctx.ellipse(
-            cx,
-            cy,
-            TILE_WIDTH * 0.38 * scale,
-            TILE_HEIGHT * 0.28 * scale,
-            0,
-            0,
-            Math.PI * 2
-          );
-          ctx.fill();
-        }
-      }
+      drawFloodWaterLayer(ctx, currentGrid, n, floodWaterVisualRef.current, {
+        left: viewLeft,
+        top: viewTop,
+        right: viewRight,
+        bottom: viewBottom,
+      }, {
+        waterCutoff: getFloodWaterCutoff(z),
+        timeMs: now,
+      });
 
       ctx.restore();
     };
@@ -3229,7 +3316,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       )}
       
       {/* City Connection Dialog */}
-      {cityConnectionDialog && (() => {
+      {cityConnectionDialog && !selectedRegion && (() => {
         // Find a discovered but not connected city in this direction
         const city = adjacentCities.find(c => c.direction === cityConnectionDialog.direction && c.discovered && !c.connected);
         if (!city) return null;

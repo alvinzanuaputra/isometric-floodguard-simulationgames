@@ -7,6 +7,7 @@ import { useGame } from '@/context/GameContext';
 import { Card } from '@/components/ui/card';
 import { TILE_WIDTH, TILE_HEIGHT } from '@/components/game/types';
 import { getMinimapTerrainColor } from '@/components/game/overlays';
+import { RENDER_THRESHOLD } from '@/lib/floodSimulation';
 
 // Service buildings for minimap color mapping
 const SERVICE_BUILDINGS = new Set([
@@ -39,7 +40,7 @@ const MINIMAP_LABEL = msg('Minipeta');
 
 export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: MiniMapProps) {
   const { state } = useGame();
-  const { grid, gridSize, tick } = state;
+  const { grid, gridSize, tick, selectedRegion } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gridImageRef = useRef<ImageData | null>(null);
   const lastGridRenderTickRef = useRef(-1);
@@ -90,6 +91,11 @@ export const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: Min
 
           if (hasElevationData) {
             color = getMinimapTerrainColor(tile);
+            if (selectedRegion && tile.waterLevel > RENDER_THRESHOLD) {
+              const t = Math.min(1, tile.waterLevel / 0.4);
+              const b = Math.round(120 + t * 100);
+              color = `rgb(29, 78, ${b})`;
+            }
             if (tile.building.onFire) color = '#ef4444';
             else if (serviceBuildings.has(buildingType)) color = '#c084fc';
             else if (parkBuildings.has(buildingType)) color = '#84cc16';

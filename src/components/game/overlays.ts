@@ -18,6 +18,8 @@ export type ServiceCoverage = {
   evacuation: number;
   medical: number;
   preparedness: number;
+  pump?: boolean;
+  drain?: boolean;
 };
 
 /** Configuration for an overlay mode */
@@ -57,14 +59,14 @@ export const OVERLAY_CONFIG: Record<OverlayMode, OverlayConfig> = {
     hoverColor: 'hover:bg-blue-600',
   },
   fire: {
-    label: 'Pemadam',
-    title: 'Cakupan Pemadam Kebakaran',
+    label: 'Penyelamatan',
+    title: 'Cakupan Penyelamatan & SAR',
     activeColor: 'bg-red-500',
     hoverColor: 'hover:bg-red-600',
   },
   police: {
-    label: 'Polisi',
-    title: 'Cakupan Polisi',
+    label: 'Evakuasi',
+    title: 'Cakupan Pos Evakuasi',
     activeColor: 'bg-blue-600',
     hoverColor: 'hover:bg-blue-700',
   },
@@ -104,6 +106,18 @@ export const OVERLAY_CONFIG: Record<OverlayMode, OverlayConfig> = {
     activeColor: 'bg-blue-600',
     hoverColor: 'hover:bg-blue-700',
   },
+  pump_coverage: {
+    label: 'Pompa',
+    title: 'Cakupan Pompa Banjir',
+    activeColor: 'bg-sky-500',
+    hoverColor: 'hover:bg-sky-600',
+  },
+  drain_coverage: {
+    label: 'Drainase',
+    title: 'Cakupan Saluran & Drainase',
+    activeColor: 'bg-cyan-600',
+    hoverColor: 'hover:bg-cyan-700',
+  },
 };
 
 /** Mode overlay yang ditampilkan di UI FloodGuard (sembunyikan power/water/subway — §6.4). */
@@ -112,6 +126,8 @@ export const FLOODGUARD_OVERLAY_TOGGLE_MODES: OverlayMode[] = [
   'terrain_elevation',
   'flood_risk',
   'flood_level',
+  'pump_coverage',
+  'drain_coverage',
   'fire',
   'police',
   'health',
@@ -124,6 +140,8 @@ export function isFullGridOverlayMode(mode: OverlayMode): boolean {
     mode === 'terrain_elevation' ||
     mode === 'flood_risk' ||
     mode === 'flood_level' ||
+    mode === 'pump_coverage' ||
+    mode === 'drain_coverage' ||
     mode === 'subway'
   );
 }
@@ -139,6 +157,8 @@ export const TOOL_TO_OVERLAY_MAP: Record<string, OverlayMode> = {
   university: 'education',
   subway_station: 'subway',
   subway: 'subway',
+  flood_pump: 'pump_coverage',
+  drain_channel: 'drain_coverage',
 };
 
 /** Get the button class name for an overlay button */
@@ -311,6 +331,12 @@ export function getOverlayFillStyle(
       return floodLevelToOverlayRgba(tile);
     }
 
+    case 'pump_coverage':
+      return coverage.pump ? 'rgba(56, 189, 248, 0.42)' : NO_OVERLAY;
+
+    case 'drain_coverage':
+      return coverage.drain ? 'rgba(34, 211, 238, 0.38)' : NO_OVERLAY;
+
     case 'none':
     default:
       return NO_OVERLAY;
@@ -328,7 +354,7 @@ export function getOverlayForTool(tool: string): OverlayMode {
 /** List of all overlay modes (for iteration) */
 export const OVERLAY_MODES: OverlayMode[] = [
   'none', 'power', 'water', 'fire', 'police', 'health', 'education', 'subway',
-  'terrain_elevation', 'flood_risk', 'flood_level',
+  'terrain_elevation', 'flood_risk', 'flood_level', 'pump_coverage', 'drain_coverage',
 ];
 
 // ============================================================================
@@ -348,6 +374,8 @@ export const OVERLAY_TO_BUILDING_TYPES: Record<OverlayMode, string[]> = {
   terrain_elevation: [],
   flood_risk: [],
   flood_level: [],
+  pump_coverage: ['flood_pump'],
+  drain_coverage: ['drain_channel', 'flood_pump'],
 };
 
 /** Overlay circle stroke colors (light/visible colors) */
@@ -363,6 +391,8 @@ export const OVERLAY_CIRCLE_COLORS: Record<OverlayMode, string> = {
   terrain_elevation: 'transparent',
   flood_risk: 'transparent',
   flood_level: 'transparent',
+  pump_coverage: 'rgba(56, 189, 248, 0.85)',
+  drain_coverage: 'rgba(34, 211, 238, 0.85)',
 };
 
 /** Building highlight glow colors */
@@ -378,6 +408,8 @@ export const OVERLAY_HIGHLIGHT_COLORS: Record<OverlayMode, string> = {
   terrain_elevation: 'transparent',
   flood_risk: 'transparent',
   flood_level: 'transparent',
+  pump_coverage: 'rgba(56, 189, 248, 1)',
+  drain_coverage: 'rgba(34, 211, 238, 1)',
 };
 
 /** Overlay circle fill colors (subtle, for area visibility) */
@@ -393,4 +425,6 @@ export const OVERLAY_CIRCLE_FILL_COLORS: Record<OverlayMode, string> = {
   terrain_elevation: 'transparent',
   flood_risk: 'transparent',
   flood_level: 'transparent',
+  pump_coverage: 'rgba(56, 189, 248, 0.14)',
+  drain_coverage: 'rgba(34, 211, 238, 0.12)',
 };

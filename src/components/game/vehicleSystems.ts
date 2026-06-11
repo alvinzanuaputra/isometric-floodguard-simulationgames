@@ -503,7 +503,8 @@ export function useVehicleSystems(
   }, [worldStateRef]);
 
   const spawnCrimeIncidents = useCallback((delta: number) => {
-    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, selectedRegion } = worldStateRef.current;
+    if (selectedRegion) return;
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
     
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;
@@ -573,7 +574,8 @@ export function useVehicleSystems(
   }, [worldStateRef, crimeSpawnTimerRef, activeCrimeIncidentsRef, state.services.evacuation, state.stats.population]);
 
   const updateCrimeIncidents = useCallback((delta: number) => {
-    const { speed: currentSpeed } = worldStateRef.current;
+    const { speed: currentSpeed, selectedRegion } = worldStateRef.current;
+    if (selectedRegion) return;
     if (currentSpeed === 0) return;
     
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;

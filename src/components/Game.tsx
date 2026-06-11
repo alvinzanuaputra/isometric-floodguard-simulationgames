@@ -35,6 +35,7 @@ import {
 import { FloodResultDialog } from '@/components/game/panels/FloodResultDialog';
 import { MiniMap } from '@/components/game/MiniMap';
 import { TopBar, StatsPanel } from '@/components/game/TopBar';
+import { FloodProgressBar } from '@/components/game/FloodProgressBar';
 import { CanvasIsometricGrid } from '@/components/game/CanvasIsometricGrid';
 
 // Cargo type names for notifications
@@ -254,12 +255,12 @@ export default function Game({
             selectedTile={selectedTile && state.selectedTool === 'select' ? state.grid[selectedTile.y][selectedTile.x] : null}
             services={state.services}
             onCloseTile={() => setSelectedTile(null)}
-            onShare={() => setShowShareModal(true)}
+            onShare={state.selectedRegion ? undefined : () => setShowShareModal(true)}
             onExit={onExit}
           />
           
           {/* Share Modal for mobile co-op */}
-          {multiplayer && (
+          {multiplayer && !state.selectedRegion && (
             <ShareModal
               open={showShareModal}
               onOpenChange={setShowShareModal}
@@ -348,6 +349,7 @@ export default function Game({
         
         <div className="flex-1 flex flex-col ml-56">
           <TopBar />
+          {state.selectedRegion && <FloodProgressBar />}
           <StatsPanel />
           <div className="flex-1 relative overflow-visible">
             <CanvasIsometricGrid 

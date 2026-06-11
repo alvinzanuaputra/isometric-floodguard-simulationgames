@@ -154,8 +154,21 @@ export function MiniStat({ icon, label, value }: MiniStatProps) {
 
 export const StatsPanel = React.memo(function StatsPanel() {
   const { state } = useGame();
-  const { stats } = state;
+  const { stats, selectedRegion, floodStats } = state;
   const m = useMessages();
+
+  if (selectedRegion && floodStats) {
+    const floodedPct = Math.round(floodStats.floodedRatio * 100);
+    return (
+      <div className="h-8 bg-secondary/50 border-b border-border flex items-center justify-center gap-8 text-xs">
+        <MiniStat icon={<SafetyIcon size={12} />} label="Indeks Keamanan" value={Math.round(floodStats.safetyIndex)} />
+        <MiniStat icon={<EnvironmentIcon size={12} />} label="Wilayah Tergenang (%)" value={floodedPct} />
+        <MiniStat icon={<HealthIcon size={12} />} label="Medis" value={stats.health} />
+        <MiniStat icon={<HappyIcon size={12} />} label="Kesiapsiagaan" value={stats.environment} />
+        <MiniStat icon={<EducationIcon size={12} />} label="Dana (rb)" value={Math.round(stats.money / 1000)} />
+      </div>
+    );
+  }
   
   return (
     <div className="h-8 bg-secondary/50 border-b border-border flex items-center justify-center gap-8 text-xs">
@@ -174,8 +187,9 @@ export const StatsPanel = React.memo(function StatsPanel() {
 
 export const TopBar = React.memo(function TopBar() {
   const { state, setSpeed, setTaxRate, visualHour } = useGame();
-  const { stats, year, month, day, speed, taxRate, cityName, weatherState } = state;
+  const { stats, year, month, day, speed, taxRate, cityName, weatherState, selectedRegion, floodStats } = state;
   const m = useMessages();
+  const isFloodGuard = !!selectedRegion;
   
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const formattedDate = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${year}`;
@@ -246,8 +260,29 @@ export const TopBar = React.memo(function TopBar() {
       </div>
       
       <div className="flex items-center gap-3">
-        <StatBadge value={stats.population.toLocaleString()} label={String(m(UI_LABELS.population))} />
-        <StatBadge value={stats.jobs.toLocaleString()} label={String(m(UI_LABELS.jobs))} />
+        {isFloodGuard && floodStats ? (
+          <>
+            <StatBadge
+              value={`${Math.round(floodStats.safetyIndex)}%`}
+              label="Keamanan"
+              variant={floodStats.safetyIndex >= 70 ? 'success' : floodStats.safetyIndex >= 40 ? 'warning' : 'destructive'}
+            />
+            <StatBadge
+              value={`${Math.round(floodStats.floodedRatio * 100)}%`}
+              label="Tergenang"
+              variant={floodStats.floodedRatio >= 0.25 ? 'destructive' : floodStats.floodedRatio >= 0.15 ? 'warning' : 'success'}
+            />
+            <StatBadge
+              value={`${floodStats.rainyDaysSurvived}/${floodStats.winTargetDays}`}
+              label="Hari Hujan"
+            />
+          </>
+        ) : (
+          <>
+            <StatBadge value={stats.population.toLocaleString()} label={String(m(UI_LABELS.population))} />
+            <StatBadge value={stats.jobs.toLocaleString()} label={String(m(UI_LABELS.jobs))} />
+          </>
+        )}
         <StatBadge 
           value={`$${stats.money.toLocaleString()}`} 
           label={String(m(UI_LABELS.funds))}
@@ -262,29 +297,29 @@ export const TopBar = React.memo(function TopBar() {
           variant={stats.income - stats.expenses >= 0 ? 'success' : 'destructive'}
         />
         
-        <Separator orientation="vertical" className="h-8" />
-        
-        <div className="flex items-center gap-1.5">
-          <DemandIndicator label="R" demand={stats.demand.residential} color="text-green-500" />
-          <DemandIndicator label="C" demand={stats.demand.commercial} color="text-blue-500" />
-          <DemandIndicator label="I" demand={stats.demand.industrial} color="text-amber-500" />
-        </div>
-        
-        <Separator orientation="vertical" className="h-8" />
-        
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground text-xs">{m(UI_LABELS.tax)}</span>
-          <Slider
-            value={[taxRate]}
-            onValueChange={(value) => setTaxRate(value[0])}
-            min={0}
-            max={100}
-            step={1}
-            className="w-14"
-          />
-          <span className="text-foreground text-xs font-mono tabular-nums w-7">{taxRate}%</span>
-        </div>
-        
+        {!isFloodGuard && (
+          <>
+            <Separator orientation="vertical" className="h-8" />
+            <div className="flex items-center gap-1.5">
+              <DemandIndicator label="R" demand={stats.demand.residential} color="text-green-500" />
+              <DemandIndicator label="C" demand={stats.demand.commercial} color="text-blue-500" />
+              <DemandIndicator label="I" demand={stats.demand.industrial} color="text-amber-500" />
+            </div>
+            <Separator orientation="vertical" className="h-8" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground text-xs">{m(UI_LABELS.tax)}</span>
+              <Slider
+                value={[taxRate]}
+                onValueChange={(value) => setTaxRate(value[0])}
+                min={0}
+                max={100}
+                step={1}
+                className="w-14"
+              />
+              <span className="text-foreground text-xs font-mono tabular-nums w-7">{taxRate}%</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
